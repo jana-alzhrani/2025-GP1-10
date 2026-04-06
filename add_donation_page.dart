@@ -27,6 +27,7 @@ class AddDonationPage extends StatefulWidget {
 
 
 class _AddDonationPageState extends State<AddDonationPage> {
+bool inputsLocked = false; 
 
   String? selectedGender;
 
@@ -428,7 +429,7 @@ child: Scaffold(
             labelText: "الجنس",
             prefixIcon: const Icon(Icons.person, color: primaryGreen),
             filled: true,
-            fillColor: Colors.white,
+            fillColor: openedBox == null ? Colors.white : Colors.grey[300],
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
 
             border: OutlineInputBorder(
@@ -450,8 +451,7 @@ child: Scaffold(
           items: ["ذكر", "أنثى"]
               .map((e) => DropdownMenuItem(value: e, child: Text(e)))
               .toList(),
-
-          onChanged: (v) => setState(() => selectedGender = v),
+onChanged: (v) => setState(() => selectedGender = v),
           value: selectedGender,
         ),
 
@@ -462,8 +462,8 @@ child: Scaffold(
             labelText: "الفئة العمرية",
             prefixIcon: const Icon(Icons.cake, color: primaryGreen),
             filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            fillColor: openedBox == null ? Colors.white : Colors.grey[300],   
+                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
 
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(18),
@@ -487,7 +487,6 @@ child: Scaffold(
               child: Text(age['label']),
             );
           }).toList(),
-
           onChanged: (v) => setState(() => selectedAgeGroup = v),
           value: selectedAgeGroup,
         ),
@@ -497,8 +496,8 @@ child: Scaffold(
         TextField(
           controller: _itemCountController,
           keyboardType: TextInputType.number,
-          onChanged: openedBox == null ? _updateItemCount : null,
-          enabled: openedBox == null,
+          onChanged: inputsLocked ? null : _updateItemCount,
+enabled: !inputsLocked,
 
           decoration: InputDecoration(
             labelText: "إجمالي عدد القطع",
@@ -564,11 +563,13 @@ child: Scaffold(
                   bool isSaved = savedBoxes.contains(boxNum);
 
                   return GestureDetector(
-                    onTap: () {
-
-                      if (!isSaved) {
-                        setState(() => openedBox = boxNum);
-                      } else {
+                  onTap: () {
+  if (!isSaved) {
+    setState(() {
+      openedBox = boxNum;
+      inputsLocked = true; // قفل الحقول الثلاثة
+    });
+  } else {
 
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
