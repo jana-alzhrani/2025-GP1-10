@@ -27,7 +27,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
 
       // Decide first page based on login state
-      initialRoute: user == null ? '/' : '/home',
+      initialRoute: user == null ? '/' : '/donorHome',
 
       routes: {
 
