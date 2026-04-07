@@ -28,7 +28,7 @@ class WelcomePage extends StatelessWidget {
                 height: 50,
                 child: ElevatedButton(
                   onPressed: () {
-                    // Navigate to login page
+                    Navigator.pushNamed(context, '/login'); // Navigate to login page
                   },
                   child: const Text(
                     "تسجيل الدخول",
@@ -45,7 +45,7 @@ class WelcomePage extends StatelessWidget {
                 height: 50,
                 child: OutlinedButton(
                   onPressed: () {
-                    // Navigate to sign up page
+                     Navigator.pushNamed(context, '/signup'); // Navigate to sign up page
                   },
                   child: const Text(
                     "إنشاء حساب",
