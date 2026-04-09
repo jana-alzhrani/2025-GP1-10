@@ -1,0 +1,673 @@
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+class AppColors {
+  static const Color primary = Color(0xFF2F4858);
+  static const Color primaryDark = Color(0xFF243B4A);
+  static const Color background = Color(0xFFF5EDE4);
+  static const Color pattern = Color(0xFFD6C3A3);
+  static const Color accent = Color(0xFFE4D1B0);
+  static const Color white = Colors.white;
+}
+
+class DonorHomePage extends StatefulWidget {
+  final String userEmail;
+
+  const DonorHomePage({
+    super.key,
+    required this.userEmail,
+  });
+
+  @override
+  State<DonorHomePage> createState() => _DonorHomePageState();
+}
+
+class _DonorHomePageState extends State<DonorHomePage> {
+  final PageController _pageController = PageController(viewportFraction: 0.90);
+
+  int _currentCardIndex = 0;
+  int _bottomNavIndex = 0;
+
+  String userName = '...';
+  int clothingCount = 0;
+  int donorsCount = 0;
+  int familiesCount = 0;
+
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHomeData();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadHomeData() async {
+    try {
+      final normalizedEmail = widget.userEmail.trim().toLowerCase();
+
+      final userQuery = await FirebaseFirestore.instance
+          .collection('Users')
+          .where('email', isEqualTo: normalizedEmail)
+          .limit(1)
+          .get();
+
+      final donorsSnapshot =
+          await FirebaseFirestore.instance.collection('donors').get();
+
+      final itemsSnapshot =
+          await FirebaseFirestore.instance.collection('items').get();
+
+      final beneficiariesSnapshot =
+          await FirebaseFirestore.instance.collection('beneficiaries').get();
+
+      if (!mounted) return;
+
+      String fetchedUserName = 'مستخدم';
+
+      if (userQuery.docs.isNotEmpty) {
+        final data = userQuery.docs.first.data();
+        fetchedUserName = (data['firstName'] ?? 'مستخدم').toString();
+      }
+
+      setState(() {
+        userName = fetchedUserName;
+        donorsCount = donorsSnapshot.docs.length;
+        clothingCount = itemsSnapshot.docs.length;
+        familiesCount = beneficiariesSnapshot.docs.length;
+        isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading home data: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        userName = 'مستخدم';
+        donorsCount = 0;
+        clothingCount = 0;
+        familiesCount = 0;
+        isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: SafeArea(
+          child: _buildHomeContent(),
+        ),
+        bottomNavigationBar: _buildBottomNavigationBar(),
+      ),
+    );
+  }
+
+  Widget _buildHomeContent() {
+    return RefreshIndicator(
+      onRefresh: _loadHomeData,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildHeader(),
+            const SizedBox(height: 20),
+            _buildWelcomeStrip(),
+            const SizedBox(height: 24),
+            _buildCardsSlider(),
+            const SizedBox(height: 12),
+            _buildSliderDots(),
+            const SizedBox(height: 18),
+            _buildDonateSection(),
+            const SizedBox(height: 28),
+            _buildStatsSection(),
+            const SizedBox(height: 24),
+            _buildVerse(),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    final String firstLetter =
+        userName.trim().isNotEmpty ? userName.trim()[0] : 'م';
+
+    return Row(
+      children: [
+        CircleAvatar(
+          radius: 24,
+          backgroundColor: AppColors.primary,
+          child: Text(
+            firstLetter,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+              fontSize: 20,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'مرحبًا',
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                userName,
+                style: const TextStyle(
+                  color: AppColors.primary,
+                  fontSize: 31,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWelcomeStrip() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.82),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: AppColors.primary.withOpacity(0.06),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'ابدأ رحلتك في العطاء من هنا، وساهم في دعم الأسر المستفيدة بواجهة سهلة وواضحة.',
+              style: TextStyle(
+                color: AppColors.primary.withOpacity(0.85),
+                fontSize: 14.5,
+                height: 1.6,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: AppColors.accent.withOpacity(0.35),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.eco_rounded,
+              color: AppColors.primary,
+              size: 20,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCardsSlider() {
+    final List<_HomeCardData> cards = [
+      const _HomeCardData(
+        title: 'تبرعك يصنع فرقًا',
+        subtitle:
+            'من خلال مدد يمكنك دعم الأسر المستفيدة والمساهمة في توفير الكسوة بطريقة سهلة وواضحة.',
+        background: AppColors.primary,
+        titleColor: Colors.white,
+        subtitleColor: Colors.white,
+        accentColor: AppColors.pattern,
+        icon: Icons.volunteer_activism_rounded,
+      ),
+      const _HomeCardData(
+        title: 'أثر عطائك',
+        subtitle:
+            'كل مساهمة منك تقرّب الخير إلى أسرة مستفيدة وتمنحها دعمًا يصل في وقته.',
+        background: AppColors.primaryDark,
+        titleColor: Colors.white,
+        subtitleColor: Colors.white,
+        accentColor: AppColors.accent,
+        icon: Icons.favorite_rounded,
+      ),
+      const _HomeCardData(
+        title: 'خطوة منك.. حياة أدفأ لهم',
+        subtitle:
+            'كن جزءًا من عطاء يصل لمستحقيه ويصنع أثرًا حقيقيًا يستمر مع كل مساهمة.',
+        background: AppColors.pattern,
+        titleColor: AppColors.primary,
+        subtitleColor: AppColors.primary,
+        accentColor: AppColors.accent,
+        icon: Icons.family_restroom_rounded,
+      ),
+    ];
+
+    return SizedBox(
+      height: 260,
+      child: PageView.builder(
+        controller: _pageController,
+        itemCount: cards.length,
+        onPageChanged: (index) {
+          setState(() {
+            _currentCardIndex = index;
+          });
+        },
+        itemBuilder: (context, index) {
+          final card = cards[index];
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: _DonationCard(data: card),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSliderDots() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(
+        3,
+        (index) => AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          width: _currentCardIndex == index ? 24 : 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: _currentCardIndex == index
+                ? AppColors.primary
+                : AppColors.pattern,
+            borderRadius: BorderRadius.circular(20),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDonateSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'ابدأ التبرع',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: AppColors.primary,
+            fontSize: 20,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          height: 56,
+          child: ElevatedButton(
+            onPressed: () {
+              Navigator.pushNamed(context, '/addDonation');
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.accent,
+              foregroundColor: AppColors.primary,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+            ),
+            child: const Text(
+              'ساهم الآن',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'إحصائيات البرنامج',
+          style: TextStyle(
+            color: AppColors.primary,
+            fontSize: 24,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 16),
+        if (isLoading)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: CircularProgressIndicator(),
+            ),
+          )
+        else ...[
+          Row(
+            children: [
+              Expanded(
+                child: _StatCard(
+                  title: 'عدد المتبرعين',
+                  value: '$donorsCount',
+                  icon: Icons.volunteer_activism_outlined,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _StatCard(
+                  title: 'الكسوات المقدمة',
+                  value: '$clothingCount',
+                  icon: Icons.checkroom_rounded,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _StatCard(
+            title: 'الأسر المستفيدة',
+            value: '$familiesCount',
+            icon: Icons.home_work_rounded,
+            fullWidth: true,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildVerse() {
+    return const Center(
+      child: Text(
+        '﴿ لَن تَنَالُوا الْبِرَّ حَتّىٰ تُنفِقُوا مِمّا تُحِبّونَ ﴾',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: AppColors.primary,
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomNavigationBar() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withOpacity(0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: NavigationBar(
+        height: 78,
+        selectedIndex: _bottomNavIndex,
+        backgroundColor: Colors.transparent,
+        indicatorColor: AppColors.accent.withOpacity(0.35),
+        surfaceTintColor: Colors.transparent,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        onDestinationSelected: (index) {
+          if (index == _bottomNavIndex && index == 0) return;
+
+          setState(() {
+            _bottomNavIndex = index;
+          });
+
+          if (index == 1) {
+            Navigator.pushNamed(context, '/viewDonation');
+          } else if (index == 2) {
+            Navigator.pushNamed(context, '/more');
+          }
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined, color: AppColors.primary),
+            selectedIcon: Icon(Icons.home_rounded, color: AppColors.primary),
+            label: 'الرئيسية',
+          ),
+          NavigationDestination(
+            icon: Icon(
+              Icons.volunteer_activism_outlined,
+              color: AppColors.primary,
+            ),
+            selectedIcon: Icon(
+              Icons.volunteer_activism_rounded,
+              color: AppColors.primary,
+            ),
+            label: 'تبرعاتي',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.more_horiz_rounded, color: AppColors.primary),
+            selectedIcon: Icon(Icons.more_horiz_rounded, color: AppColors.primary),
+            label: 'المزيد',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeCardData {
+  final String title;
+  final String subtitle;
+  final Color background;
+  final Color titleColor;
+  final Color subtitleColor;
+  final Color accentColor;
+  final IconData icon;
+
+  const _HomeCardData({
+    required this.title,
+    required this.subtitle,
+    required this.background,
+    required this.titleColor,
+    required this.subtitleColor,
+    required this.accentColor,
+    required this.icon,
+  });
+}
+
+class _DonationCard extends StatelessWidget {
+  final _HomeCardData data;
+
+  const _DonationCard({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final subtitleColor = data.subtitleColor.withOpacity(
+      data.background == AppColors.pattern ? 0.82 : 0.92,
+    );
+
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: data.background,
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withOpacity(0.10),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            top: -18,
+            left: -8,
+            child: Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: data.accentColor.withOpacity(0.10),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -30,
+            right: -10,
+            child: Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: data.accentColor.withOpacity(0.08),
+              ),
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Align(
+                alignment: Alignment.topLeft,
+                child: CircleAvatar(
+                  radius: 22,
+                  backgroundColor: Colors.white.withOpacity(0.14),
+                  child: Icon(
+                    data.icon,
+                    color: data.titleColor,
+                    size: 24,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                data.title,
+                style: TextStyle(
+                  color: data.titleColor,
+                  fontSize: 30,
+                  fontWeight: FontWeight.w800,
+                  height: 1.2,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: Text(
+                  data.subtitle,
+                  maxLines: 4,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: subtitleColor,
+                    fontSize: 15.5,
+                    height: 1.65,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final IconData icon;
+  final bool fullWidth;
+
+  const _StatCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+    this.fullWidth = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: fullWidth ? double.infinity : null,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: AppColors.primary.withOpacity(0.06),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withOpacity(0.06),
+            blurRadius: 14,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: AppColors.accent.withOpacity(0.35),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              icon,
+              color: AppColors.primary,
+              size: 21,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: AppColors.primary.withOpacity(0.70),
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w600,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 27,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
