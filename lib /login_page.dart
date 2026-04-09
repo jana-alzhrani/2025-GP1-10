@@ -67,7 +67,6 @@ class _LoginPageState extends State<LoginPage> {
             lastName: '',
             email: emailText,
             phone: '',
-            password: '',
             isLogin: true,
           ),
         ),
