@@ -101,8 +101,7 @@ class _OtpPageState extends State<OtpPage> {
       }
       
 Navigator.pushNamedAndRemoveUntil(
-  context,
-  '/donorHome',
+  context,'/donorHome',
   (route) => false,
 );
     } else {
