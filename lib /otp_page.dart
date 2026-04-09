@@ -10,7 +10,6 @@ class OtpPage extends StatefulWidget {
   final String lastName;
   final String email;
   final String phone;
-  final String password;
   final bool isLogin;
 
   OtpPage({
@@ -19,7 +18,6 @@ class OtpPage extends StatefulWidget {
     required this.lastName,
     required this.email,
     required this.phone,
-    required this.password,
     required this.isLogin,
   });
 
@@ -84,12 +82,16 @@ class _OtpPageState extends State<OtpPage> {
         ).showSnackBar(SnackBar(content: Text("تم تسجيل الدخول بنجاح 🎉")));
       } else {
         // إنشاء حساب
-        await FirebaseFirestore.instance.collection('Users').add({
+
+        var userRef = FirebaseFirestore.instance.collection('Users').doc();
+
+        await userRef.set({
+          'userId': userRef.id,
           'firstName': widget.firstName,
           'lastName': widget.lastName,
           'email': widget.email,
           'phone': widget.phone,
-          'password': widget.password,
+          'role': 'donor',
           'createdAt': FieldValue.serverTimestamp(),
         });
 
