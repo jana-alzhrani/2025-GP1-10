@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'dart:math';
-import 'login_page.dart';
+import 'donor_home_page.dart';
 
 class OtpPage extends StatefulWidget {
   String correctCode;
@@ -99,11 +99,16 @@ class _OtpPageState extends State<OtpPage> {
           context,
         ).showSnackBar(SnackBar(content: Text("تم إنشاء الحساب بنجاح 🎉")));
       }
-      
-Navigator.pushNamedAndRemoveUntil(
-  context,'/donorHome',
-  (route) => false,
-);
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) => DonorHomePage(
+            userEmail: widget.email, // جديد
+          ),
+        ),
+        (route) => false,
+      );
     } else {
       ScaffoldMessenger.of(
         context,
