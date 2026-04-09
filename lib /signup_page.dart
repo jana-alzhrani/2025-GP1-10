@@ -14,8 +14,6 @@ class _SignUpPageState extends State<SignUpPage> {
   final lastName = TextEditingController();
   final email = TextEditingController();
   final phone = TextEditingController();
-  final password = TextEditingController();
-  final confirmPassword = TextEditingController();
 
   // إرسال OTP
   Future<void> sendEmailOTP(String emailText) async {
@@ -38,7 +36,6 @@ class _SignUpPageState extends State<SignUpPage> {
             lastName: lastName.text,
             email: emailText,
             phone: phone.text.trim(),
-            password: password.text,
             isLogin: false,
           ),
         ),
@@ -58,9 +55,7 @@ class _SignUpPageState extends State<SignUpPage> {
     if (firstName.text.isEmpty ||
         lastName.text.isEmpty ||
         emailText.isEmpty ||
-        phoneText.isEmpty ||
-        password.text.isEmpty ||
-        confirmPassword.text.isEmpty) {
+        phoneText.isEmpty) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text("الرجاء تعبئة جميع الحقول")));
@@ -78,13 +73,6 @@ class _SignUpPageState extends State<SignUpPage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text("رقم الجوال غير صحيح")));
-      return;
-    }
-
-    if (password.text != confirmPassword.text) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("كلمتا المرور غير متطابقتين")));
       return;
     }
 
@@ -167,22 +155,6 @@ class _SignUpPageState extends State<SignUpPage> {
               ),
 
               SizedBox(height: 20),
-
-              TextField(
-                controller: password,
-                obscureText: true,
-                decoration: InputDecoration(labelText: "كلمة المرور"),
-              ),
-
-              SizedBox(height: 20),
-
-              TextField(
-                controller: confirmPassword,
-                obscureText: true,
-                decoration: InputDecoration(labelText: "تأكيد كلمة المرور"),
-              ),
-
-              SizedBox(height: 30),
 
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
