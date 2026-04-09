@@ -99,12 +99,12 @@ class _OtpPageState extends State<OtpPage> {
           context,
         ).showSnackBar(SnackBar(content: Text("تم إنشاء الحساب بنجاح 🎉")));
       }
-
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => LoginPage()),
-        (route) => false,
-      );
+      
+Navigator.pushNamedAndRemoveUntil(
+  context,
+  '/donorHome',
+  (route) => false,
+);
     } else {
       ScaffoldMessenger.of(
         context,
