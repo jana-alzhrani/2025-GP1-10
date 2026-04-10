@@ -769,10 +769,11 @@ Widget build(BuildContext context) {
                       });
 
                       Navigator.pushNamedAndRemoveUntil(
-                        context,
-                        '/donorHome',
-                        (route) => false,
-                      );
+              context,
+              '/donorHome',
+              (route) => false,
+              arguments: user?.email ?? '',
+            );
                     }
                   : null,
               child: const Text("تم"),
