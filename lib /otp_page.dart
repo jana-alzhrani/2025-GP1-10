@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'dart:math';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'donor_home_page.dart';
 
 class OtpPage extends StatefulWidget {
@@ -11,6 +12,7 @@ class OtpPage extends StatefulWidget {
   final String email;
   final String phone;
   final bool isLogin;
+  final String password;
 
   OtpPage({
     required this.correctCode,
@@ -19,6 +21,7 @@ class OtpPage extends StatefulWidget {
     required this.email,
     required this.phone,
     required this.isLogin,
+    required this.password,
   });
 
   @override
@@ -74,47 +77,59 @@ class _OtpPageState extends State<OtpPage> {
   }
 
   Future<void> verifyCode() async {
-    if (codeController.text.trim() == widget.correctCode) {
-      if (widget.isLogin) {
-        // تسجيل دخول
-        ScaffoldMessenger.of(
+    try {
+      if (codeController.text.trim() == widget.correctCode) {
+        if (widget.isLogin) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text("تم تسجيل الدخول بنجاح 🎉")));
+        } else {
+          final userCredential = await FirebaseAuth.instance
+              .createUserWithEmailAndPassword(
+                email: widget.email,
+                password: widget.password,
+              );
+
+          var userRef = FirebaseFirestore.instance
+              .collection('Users')
+              .doc(userCredential.user!.uid);
+
+          await userRef.set({
+            'userId': userCredential.user!.uid,
+            'firstName': widget.firstName,
+            'lastName': widget.lastName,
+            'email': widget.email.trim().toLowerCase(),
+            'phone': widget.phone,
+            'role': 'donor',
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text("تم إنشاء الحساب بنجاح 🎉")));
+        }
+
+        //  الانتقال للهوم
+        Navigator.pushAndRemoveUntil(
           context,
-        ).showSnackBar(SnackBar(content: Text("تم تسجيل الدخول بنجاح 🎉")));
-      } else {
-        // إنشاء حساب
-
-        var userRef = FirebaseFirestore.instance.collection('Users').doc();
-
-        await userRef.set({
-          'userId': userRef.id,
-          'firstName': widget.firstName,
-          'lastName': widget.lastName,
-          'email': widget.email,
-          'phone': widget.phone,
-          'role': 'donor',
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("تم إنشاء الحساب بنجاح 🎉")));
-      }
-
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(
-          builder: (_) => DonorHomePage(
-            userEmail: widget.email, // جديد
+          MaterialPageRoute(
+            builder: (_) => DonorHomePage(userEmail: widget.email),
           ),
-        ),
-        (route) => false,
-      );
-    } else {
+          (route) => false,
+        );
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("الكود غير صحيح")));
+
+        codeController.clear();
+      }
+    } catch (e) {
+      print("ERROR: $e");
+
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text("الكود غير صحيح")));
-
-      codeController.clear();
+      ).showSnackBar(SnackBar(content: Text(" خطأ ❌")));
     }
   }
 
