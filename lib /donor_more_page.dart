@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'app_design.dart';
 
 class DonorMorePage extends StatefulWidget {
@@ -21,6 +22,9 @@ class _DonorMorePageState extends State<DonorMorePage> {
   String lastName = '';
   String phone = '';
   String email = '';
+  String maskedPassword = '-';
+
+  bool isLoading = true;
 
   @override
   void initState() {
@@ -30,32 +34,57 @@ class _DonorMorePageState extends State<DonorMorePage> {
 
   Future<void> _loadUserData() async {
     try {
-      final normalizedEmail = widget.userEmail.trim().toLowerCase();
+      final currentUser = FirebaseAuth.instance.currentUser;
 
-      final userQuery = await FirebaseFirestore.instance
+      if (currentUser == null) {
+        if (!mounted) return;
+        setState(() {
+          email = widget.userEmail;
+          isLoading = false;
+        });
+        return;
+      }
+
+      final userDoc = await FirebaseFirestore.instance
           .collection('Users')
-          .where('email', isEqualTo: normalizedEmail)
-          .limit(1)
+          .doc(currentUser.uid)
           .get();
 
       if (!mounted) return;
 
-      if (userQuery.docs.isNotEmpty) {
-        final data = userQuery.docs.first.data();
+      if (userDoc.exists) {
+        final data = userDoc.data() ?? {};
+
+        final rawPassword = (data['password'] ?? '').toString().trim();
 
         setState(() {
           firstName = (data['firstName'] ?? '').toString().trim();
           lastName = (data['lastName'] ?? '').toString().trim();
           phone = (data['phone'] ?? '').toString().trim();
-          email = (data['email'] ?? widget.userEmail).toString().trim();
+          email = (data['email'] ?? currentUser.email ?? widget.userEmail)
+              .toString()
+              .trim();
+
+          maskedPassword =
+              rawPassword.isEmpty ? '-' : '•' * rawPassword.length;
+
+          isLoading = false;
         });
       } else {
         setState(() {
-          email = widget.userEmail;
+          email = currentUser.email ?? widget.userEmail;
+          maskedPassword = '-';
+          isLoading = false;
         });
       }
     } catch (e) {
       debugPrint('Error loading user data: $e');
+
+      if (!mounted) return;
+      setState(() {
+        email = widget.userEmail;
+        isLoading = false;
+      });
     }
   }
 
@@ -66,57 +95,63 @@ class _DonorMorePageState extends State<DonorMorePage> {
       child: Scaffold(
         backgroundColor: AppDesign.background,
         body: SafeArea(
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildTopIdentityHeader(),
-                Padding(
-                  padding: const EdgeInsets.only(top: 16, bottom: 10),
-                  child: Text(
-                    'البيانات الشخصية',
-                    textAlign: TextAlign.center,
-                    style: AppDesign.h1Style.copyWith(
-                      color: AppDesign.primary,
-                      fontSize: 26,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: AppPadding.screen.copyWith(top: 10, bottom: 12),
+          child: isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : SingleChildScrollView(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _buildInfoField('الاسم الأول', firstName),
-                      AppGap.md,
-                      _buildInfoField('الاسم الأخير', lastName),
-                      AppGap.md,
-                      _buildInfoField('رقم الجوال', phone),
-                      AppGap.md,
-                      _buildInfoField('البريد الإلكتروني', email),
-                      AppGap.xl,
-                      SizedBox(
-                        height: AppDesign.buttonHeightMD,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            // لاحقًا: التنقل لصفحة التعديل
-                          },
-                          child: Text(
-                            'تعديل',
-                            style: AppDesign.buttonOnPrimaryStyle.copyWith(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                            ),
+                      _buildTopIdentityHeader(),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16, bottom: 10),
+                        child: Text(
+                          'البيانات الشخصية',
+                          textAlign: TextAlign.center,
+                          style: AppDesign.h1Style.copyWith(
+                            color: AppDesign.primary,
+                            fontSize: 26,
+                            fontWeight: FontWeight.w800,
                           ),
+                        ),
+                      ),
+                      Padding(
+                        padding:
+                            AppPadding.screen.copyWith(top: 10, bottom: 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _buildInfoField('الاسم الأول', firstName),
+                            AppGap.md,
+                            _buildInfoField('الاسم الأخير', lastName),
+                            AppGap.md,
+                            _buildInfoField('رقم الجوال', phone),
+                            AppGap.md,
+                            _buildInfoField('البريد الإلكتروني', email),
+                            AppGap.md,
+                            _buildInfoField('كلمة المرور', maskedPassword),
+                            AppGap.xl,
+                            SizedBox(
+                              height: AppDesign.buttonHeightMD,
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  // لاحقاً: الانتقال لصفحة تعديل البيانات
+                                },
+                                child: Text(
+                                  'تعديل',
+                                  style:
+                                      AppDesign.buttonOnPrimaryStyle.copyWith(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
-              ],
-            ),
-          ),
         ),
         bottomNavigationBar: _buildBottomNavigationBar(),
       ),
@@ -146,24 +181,23 @@ class _DonorMorePageState extends State<DonorMorePage> {
           ),
         ),
         AppGap.sm,
-        SizedBox(
+        Container(
           height: AppDesign.inputHeight,
-          child: TextFormField(
-            initialValue: value.isEmpty ? '-' : value,
-            readOnly: true,
-            enabled: false,
+          alignment: Alignment.centerRight,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: AppDesign.surface,
+            borderRadius: BorderRadius.circular(AppDesign.radiusLG),
+            border: Border.all(
+              color: AppDesign.border,
+              width: 1,
+            ),
+          ),
+          child: Text(
+            value.isEmpty ? '-' : value,
             style: AppDesign.subtitleStyle.copyWith(
               color: AppDesign.primary,
               fontWeight: FontWeight.w700,
-            ),
-            decoration: InputDecoration(
-              hintText: label,
-              disabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppDesign.radiusLG),
-                borderSide: const BorderSide(color: AppDesign.border, width: 1),
-              ),
-              filled: true,
-              fillColor: AppDesign.surface,
             ),
           ),
         ),
