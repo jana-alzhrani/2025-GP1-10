@@ -1,14 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-
-class AppColors {
-  static const Color primary = Color(0xFF2F4858);
-  static const Color primaryDark = Color(0xFF243B4A);
-  static const Color background = Color(0xFFF5EDE4);
-  static const Color pattern = Color(0xFFD6C3A3);
-  static const Color accent = Color(0xFFE4D1B0);
-  static const Color white = Colors.white;
-}
+import 'app_design.dart';
 
 class DonorHomePage extends StatefulWidget {
   final String userEmail;
@@ -45,110 +37,116 @@ class _DonorHomePageState extends State<DonorHomePage> {
     super.dispose();
   }
 
-  Future<void> _loadHomeData() async {
-    try {
-      final normalizedEmail = widget.userEmail.trim().toLowerCase();
+Future<void> _loadHomeData() async {
+  try {
+    final normalizedEmail = widget.userEmail.trim().toLowerCase();
 
-      final userFuture = FirebaseFirestore.instance
-          .collection('Users')
-          .where('email', isEqualTo: normalizedEmail)
-          .limit(1)
-          .get();
+    final userFuture = FirebaseFirestore.instance
+        .collection('Users')
+        .where('email', isEqualTo: normalizedEmail)
+        .limit(1)
+        .get();
 
-      final donationsFuture =
-          FirebaseFirestore.instance.collection('donations').get();
+    final donorsFuture =
+        FirebaseFirestore.instance.collection('donors').get();
 
-      final beneficiariesFuture =
-          FirebaseFirestore.instance.collection('beneficiaries').get();
+    final donationsFuture =
+        FirebaseFirestore.instance.collection('donations').get();
 
-      final results = await Future.wait([
-        userFuture,
-        donationsFuture,
-        beneficiariesFuture,
-      ]);
+    final beneficiariesFuture =
+        FirebaseFirestore.instance.collection('beneficiaries').get();
 
-      if (!mounted) return;
+    final results = await Future.wait([
+      userFuture,
+      donorsFuture,
+      donationsFuture,
+      beneficiariesFuture,
+    ]);
 
-      final userQuery = results[0] as QuerySnapshot<Map<String, dynamic>>;
-      final donationsSnapshot = results[1] as QuerySnapshot<Map<String, dynamic>>;
-      final beneficiariesSnapshot =
-          results[2] as QuerySnapshot<Map<String, dynamic>>;
+    if (!mounted) return;
 
-      String fetchedUserName = 'مستخدم';
+    final userQuery = results[0] as QuerySnapshot<Map<String, dynamic>>;
+    final donorsSnapshot = results[1] as QuerySnapshot<Map<String, dynamic>>;
+    final donationsSnapshot =
+        results[2] as QuerySnapshot<Map<String, dynamic>>;
+    final beneficiariesSnapshot =
+        results[3] as QuerySnapshot<Map<String, dynamic>>;
 
-      if (userQuery.docs.isNotEmpty) {
-        final data = userQuery.docs.first.data();
-        final firstName = (data['firstName'] ?? '').toString().trim();
-        final lastName = (data['lastName'] ?? '').toString().trim();
-        final fullName = '$firstName $lastName'.trim();
-        fetchedUserName = fullName.isEmpty ? 'مستخدم' : fullName;
-      }
+    String fetchedUserName = 'مستخدم';
 
-      final Set<String> uniqueDonors = {};
-      int totalCompletedItems = 0;
-
-      for (final doc in donationsSnapshot.docs) {
-        final data = doc.data();
-
-        final donorId = (data['donorID'] ?? '').toString().trim();
-        if (donorId.isNotEmpty) {
-          uniqueDonors.add(donorId);
-        }
-
-        final status = (data['status'] ?? '').toString().trim().toLowerCase();
-        if (status == 'completed') {
-          final value = data['numberOfItems'];
-
-          if (value is int) {
-            totalCompletedItems += value;
-          } else if (value is double) {
-            totalCompletedItems += value.toInt();
-          } else if (value is String) {
-            totalCompletedItems += int.tryParse(value) ?? 0;
-          }
-        }
-      }
-
-      setState(() {
-        userName = fetchedUserName;
-        donorsCount = uniqueDonors.length;
-        clothingCount = totalCompletedItems;
-        familiesCount = beneficiariesSnapshot.docs.length;
-      });
-    } catch (e) {
-      debugPrint('Error loading home data: $e');
+    if (userQuery.docs.isNotEmpty) {
+      final data = userQuery.docs.first.data();
+      final firstName = (data['firstName'] ?? '').toString().trim();
+      final lastName = (data['lastName'] ?? '').toString().trim();
+      final fullName = '$firstName $lastName'.trim();
+      fetchedUserName = fullName.isEmpty ? 'مستخدم' : fullName;
     }
+
+    int totalCompletedItems = 0;
+
+    for (final doc in donationsSnapshot.docs) {
+      final data = doc.data();
+
+      final status = (data['status'] ?? '').toString().trim().toLowerCase();
+      if (status == 'completed') {
+        final value = data['numberOfItems'];
+
+        if (value is int) {
+          totalCompletedItems += value;
+        } else if (value is double) {
+          totalCompletedItems += value.toInt();
+        } else if (value is String) {
+          totalCompletedItems += int.tryParse(value) ?? 0;
+        }
+      }
+    }
+
+    setState(() {
+      userName = fetchedUserName;
+
+      // عدد المتبرعين من مجموعة donors
+      donorsCount = donorsSnapshot.docs.length;
+
+      // كل 5 عناصر مكتملة = كسوة واحدة
+      clothingCount = totalCompletedItems ~/ 5;
+
+      // عدد الأسر من مجموعة beneficiaries
+      familiesCount = beneficiariesSnapshot.docs.length;
+    });
+  } catch (e) {
+    debugPrint('Error loading home data: $e');
   }
+}
+  
 
   @override
   Widget build(BuildContext context) {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: AppDesign.background,
         body: SafeArea(
           child: RefreshIndicator(
+            color: AppDesign.primary,
             onRefresh: _loadHomeData,
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
+              padding: AppPadding.screen.copyWith(bottom: 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildHeader(),
-                  const SizedBox(height: 20),
-                  _buildWelcomeStrip(),
-                  const SizedBox(height: 24),
+                  AppGap.xl,
                   _buildCardsSlider(),
-                  const SizedBox(height: 12),
+                  AppGap.md,
                   _buildSliderDots(),
-                  const SizedBox(height: 18),
+                  AppGap.lg,
                   _buildDonateSection(),
                   const SizedBox(height: 28),
                   _buildStatsSection(),
-                  const SizedBox(height: 24),
+                  AppGap.section,
                   _buildVerse(),
-                  const SizedBox(height: 8),
+                  AppGap.sm,
                 ],
               ),
             ),
@@ -167,34 +165,33 @@ class _DonorHomePageState extends State<DonorHomePage> {
       children: [
         CircleAvatar(
           radius: 24,
-          backgroundColor: AppColors.primary,
+          backgroundColor: AppDesign.primary,
           child: Text(
             firstLetter,
             style: const TextStyle(
-              color: Colors.white,
+              color: AppDesign.white,
               fontWeight: FontWeight.w800,
               fontSize: 20,
             ),
           ),
         ),
-        const SizedBox(width: 12),
+        AppGap.wMD,
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'مرحبًا',
-                style: TextStyle(
-                  color: AppColors.primary,
-                  fontSize: 14,
+                style: AppDesign.bodyStyle.copyWith(
+                  color: AppDesign.primary,
                   fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 userName,
-                style: const TextStyle(
-                  color: AppColors.primary,
+                style: AppDesign.h1Style.copyWith(
+                  color: AppDesign.primary,
                   fontSize: 31,
                   fontWeight: FontWeight.w800,
                 ),
@@ -206,79 +203,36 @@ class _DonorHomePageState extends State<DonorHomePage> {
     );
   }
 
-  Widget _buildWelcomeStrip() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.82),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: AppColors.primary.withOpacity(0.06),
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              'ابدأ رحلتك في العطاء من هنا، وساهم في دعم الأسر المستفيدة بواجهة سهلة وواضحة.',
-              style: TextStyle(
-                color: AppColors.primary.withOpacity(0.85),
-                fontSize: 14.5,
-                height: 1.6,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: AppColors.accent.withOpacity(0.35),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.eco_rounded,
-              color: AppColors.primary,
-              size: 20,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildCardsSlider() {
     final List<_HomeCardData> cards = [
       const _HomeCardData(
         title: 'تبرعك يصنع فرقًا',
         subtitle:
             'من خلال مدد يمكنك دعم الأسر المستفيدة والمساهمة في توفير الكسوة بطريقة سهلة وواضحة.',
-        background: AppColors.primary,
-        titleColor: Colors.white,
-        subtitleColor: Colors.white,
-        accentColor: AppColors.pattern,
+        background: AppDesign.primary,
+        titleColor: AppDesign.white,
+        subtitleColor: AppDesign.white,
+        accentColor: AppDesign.softGreen,
         icon: Icons.volunteer_activism_rounded,
       ),
       const _HomeCardData(
         title: 'أثر عطائك',
         subtitle:
             'كل مساهمة منك تقرّب الخير إلى أسرة مستفيدة وتمنحها دعمًا يصل في وقته.',
-        background: AppColors.primaryDark,
-        titleColor: Colors.white,
-        subtitleColor: Colors.white,
-        accentColor: AppColors.accent,
+        background: AppDesign.secondary,
+        titleColor: AppDesign.white,
+        subtitleColor: AppDesign.white,
+        accentColor: AppDesign.surfaceAlt,
         icon: Icons.favorite_rounded,
       ),
       const _HomeCardData(
         title: 'خطوة منك.. حياة أدفأ لهم',
         subtitle:
             'كن جزءًا من عطاء يصل لمستحقيه ويصنع أثرًا حقيقيًا يستمر مع كل مساهمة.',
-        background: AppColors.primary,
-        titleColor: Colors.white,
-        subtitleColor: Colors.white,
-        accentColor: AppColors.accent,
+        background: AppDesign.primary,
+        titleColor: AppDesign.white,
+        subtitleColor: AppDesign.white,
+        accentColor: AppDesign.surfaceAlt,
         icon: Icons.family_restroom_rounded,
       ),
     ];
@@ -316,8 +270,8 @@ class _DonorHomePageState extends State<DonorHomePage> {
           height: 8,
           decoration: BoxDecoration(
             color: _currentCardIndex == index
-                ? AppColors.primary
-                : AppColors.pattern,
+                ? AppDesign.primary
+                : AppDesign.border,
             borderRadius: BorderRadius.circular(20),
           ),
         ),
@@ -326,48 +280,101 @@ class _DonorHomePageState extends State<DonorHomePage> {
   }
 
   Widget _buildDonateSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const Text(
-          'ابدأ التبرع',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: AppColors.primary,
-            fontSize: 20,
-            fontWeight: FontWeight.w800,
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+      decoration: BoxDecoration(
+        color: AppDesign.white,
+        borderRadius: BorderRadius.circular(AppDesign.radiusXL),
+        border: Border.all(color: AppDesign.border),
+        boxShadow: [
+          BoxShadow(
+            color: AppDesign.black.withOpacity(0.05),
+            blurRadius: 14,
+            offset: const Offset(0, 8),
           ),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          height: 56,
-          child: ElevatedButton(
-            onPressed: () {
-              Navigator.pushNamed(
-                context,
-                '/addDonation',
-                arguments: widget.userEmail,
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.accent,
-              foregroundColor: AppColors.primary,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
+        ],
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Positioned(
+  left: -20,
+  bottom: -9,
+  child: Image.asset(
+    'assets/images/donate_branch.png',
+    width: 145,
+    fit: BoxFit.contain,
+  ),
+),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: AppDesign.softGreen.withOpacity(0.18),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.eco_rounded,
+                      color: AppDesign.primary,
+                      size: 20,
+                    ),
+                  ),
+                  AppGap.wSM,
+                  Expanded(
+                    child: Text(
+                      'ابدأ رحلتك في العطاء من هنا، وساهم في دعم الأسر المستفيدة.',
+                      style: AppDesign.bodyStyle.copyWith(
+                        color: AppDesign.primary.withOpacity(0.85),
+                        fontSize: 14.5,
+                        height: 1.6,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-            child: const Text(
-              'ساهم الآن',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
+              AppGap.xl,
+              Center(
+                child: SizedBox(
+                  width: 240,
+                  height: AppDesign.buttonHeightLG,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pushNamed(
+                        context,
+                        '/addDonation',
+                        arguments: widget.userEmail,
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppDesign.softGreen,
+                      foregroundColor: AppDesign.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(AppDesign.radiusXL),
+                      ),
+                    ),
+                    child: Text(
+                      'ساهم الآن',
+                      style: AppDesign.buttonOnPrimaryStyle.copyWith(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -375,35 +382,37 @@ class _DonorHomePageState extends State<DonorHomePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'إحصائيات البرنامج',
-          style: TextStyle(
-            color: AppColors.primary,
-            fontSize: 24,
+          style: AppDesign.h1Style.copyWith(
+            color: AppDesign.primary,
             fontWeight: FontWeight.w800,
           ),
         ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: _StatCard(
-                title: 'عدد المتبرعين',
-                value: '$donorsCount',
-                icon: Icons.volunteer_activism_outlined,
+        AppGap.lg,
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: _StatCard(
+                  title: 'عدد المتبرعين',
+                  value: '$donorsCount',
+                  icon: Icons.volunteer_activism_outlined,
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _StatCard(
-                title: 'الكسوات المقدمة',
-                value: '$clothingCount',
-                icon: Icons.checkroom_rounded,
+              AppGap.wMD,
+              Expanded(
+                child: _StatCard(
+                  title: 'الكسوات المقدمة',
+                  value: '$clothingCount',
+                  icon: Icons.checkroom_rounded,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-        const SizedBox(height: 12),
+        AppGap.md,
         _StatCard(
           title: 'الأسر المستفيدة',
           value: '$familiesCount',
@@ -415,13 +424,12 @@ class _DonorHomePageState extends State<DonorHomePage> {
   }
 
   Widget _buildVerse() {
-    return const Center(
+    return Center(
       child: Text(
         '﴿ لَن تَنَالُوا الْبِرَّ حَتّىٰ تُنفِقُوا مِمّا تُحِبّونَ ﴾',
         textAlign: TextAlign.center,
-        style: TextStyle(
-          color: AppColors.primary,
-          fontSize: 16,
+        style: AppDesign.subtitleStyle.copyWith(
+          color: AppDesign.primary,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -432,11 +440,11 @@ class _DonorHomePageState extends State<DonorHomePage> {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 14),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        color: AppDesign.white,
+        borderRadius: BorderRadius.circular(AppDesign.radiusXL),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withOpacity(0.08),
+            color: AppDesign.black.withOpacity(0.06),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
@@ -446,7 +454,7 @@ class _DonorHomePageState extends State<DonorHomePage> {
         height: 78,
         selectedIndex: _bottomNavIndex,
         backgroundColor: Colors.transparent,
-        indicatorColor: AppColors.accent.withOpacity(0.35),
+        indicatorColor: AppDesign.secondary.withOpacity(0.16),
         surfaceTintColor: Colors.transparent,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         onDestinationSelected: (index) {
@@ -472,25 +480,25 @@ class _DonorHomePageState extends State<DonorHomePage> {
         },
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.home_outlined, color: AppColors.primary),
-            selectedIcon: Icon(Icons.home_rounded, color: AppColors.primary),
+            icon: Icon(Icons.home_outlined, color: AppDesign.primary),
+            selectedIcon: Icon(Icons.home_rounded, color: AppDesign.primary),
             label: 'الرئيسية',
           ),
           NavigationDestination(
             icon: Icon(
               Icons.volunteer_activism_outlined,
-              color: AppColors.primary,
+              color: AppDesign.primary,
             ),
             selectedIcon: Icon(
               Icons.volunteer_activism_rounded,
-              color: AppColors.primary,
+              color: AppDesign.primary,
             ),
             label: 'تبرعاتي',
           ),
           NavigationDestination(
-            icon: Icon(Icons.more_horiz_rounded, color: AppColors.primary),
+            icon: Icon(Icons.more_horiz_rounded, color: AppDesign.primary),
             selectedIcon:
-                Icon(Icons.more_horiz_rounded, color: AppColors.primary),
+                Icon(Icons.more_horiz_rounded, color: AppDesign.primary),
             label: 'المزيد',
           ),
         ],
@@ -535,7 +543,7 @@ class _DonationCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(30),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withOpacity(0.10),
+            color: AppDesign.black.withOpacity(0.08),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -574,7 +582,7 @@ class _DonationCard extends StatelessWidget {
                 alignment: Alignment.topLeft,
                 child: CircleAvatar(
                   radius: 22,
-                  backgroundColor: Colors.white.withOpacity(0.14),
+                  backgroundColor: AppDesign.white.withOpacity(0.14),
                   child: Icon(
                     data.icon,
                     color: data.titleColor,
@@ -633,14 +641,14 @@ class _StatCard extends StatelessWidget {
       width: fullWidth ? double.infinity : null,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        color: AppDesign.white,
+        borderRadius: BorderRadius.circular(AppDesign.radiusXL),
         border: Border.all(
-          color: AppColors.primary.withOpacity(0.06),
+          color: AppDesign.border,
         ),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withOpacity(0.06),
+            color: AppDesign.black.withOpacity(0.05),
             blurRadius: 14,
             offset: const Offset(0, 8),
           ),
@@ -652,24 +660,25 @@ class _StatCard extends StatelessWidget {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: AppColors.accent.withOpacity(0.35),
+              color: AppDesign.secondary.withOpacity(0.14),
               shape: BoxShape.circle,
             ),
             child: Icon(
               icon,
-              color: AppColors.primary,
+              color: AppDesign.primary,
               size: 21,
             ),
           ),
-          const SizedBox(width: 12),
+          AppGap.wMD,
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
                   title,
-                  style: TextStyle(
-                    color: AppColors.primary.withOpacity(0.70),
+                  style: AppDesign.bodyStyle.copyWith(
+                    color: AppDesign.textSecondary,
                     fontSize: 14.5,
                     fontWeight: FontWeight.w600,
                     height: 1.4,
@@ -678,8 +687,8 @@ class _StatCard extends StatelessWidget {
                 const SizedBox(height: 10),
                 Text(
                   value,
-                  style: const TextStyle(
-                    color: AppColors.primary,
+                  style: AppDesign.h1Style.copyWith(
+                    color: AppDesign.primary,
                     fontSize: 27,
                     fontWeight: FontWeight.w800,
                   ),
