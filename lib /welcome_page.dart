@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_design.dart';
 
 class WelcomePage extends StatelessWidget {
   const WelcomePage({super.key});
@@ -16,8 +17,7 @@ class WelcomePage extends StatelessWidget {
               // App Icon
               Image.asset(
                 'assets/icon.png',
-                width: 120,
-                height: 120,
+                width: 160,
               ),
 
               const SizedBox(height: 60),
@@ -25,15 +25,12 @@ class WelcomePage extends StatelessWidget {
               // Log In Button
               SizedBox(
                 width: double.infinity,
-                height: 50,
+                height: AppSizes.buttonHeight,
                 child: ElevatedButton(
                   onPressed: () {
                     Navigator.pushNamed(context, '/login'); // Navigate to login page
                   },
-                  child: const Text(
-                    "تسجيل الدخول",
-                    style: TextStyle(fontSize: 18),
-                  ),
+                  child: const Text("تسجيل الدخول")
                 ),
               ),
 
@@ -42,15 +39,12 @@ class WelcomePage extends StatelessWidget {
               // Sign Up Button
               SizedBox(
                 width: double.infinity,
-                height: 50,
+                height: AppSizes.buttonHeight,
                 child: OutlinedButton(
                   onPressed: () {
                      Navigator.pushNamed(context, '/signup'); // Navigate to sign up page
                   },
-                  child: const Text(
-                    "إنشاء حساب",
-                    style: TextStyle(fontSize: 18),
-                  ),
+                  child: const Text("إنشاء حساب"),
                 ),
               ),
             ],
