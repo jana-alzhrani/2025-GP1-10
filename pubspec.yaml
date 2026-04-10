@@ -35,6 +35,7 @@ flutter:
    # الصور
   assets:
     - assets/images/
+    - assets/icon.png
 
   # الخطوط
   fonts:
