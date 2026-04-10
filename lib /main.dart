@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:madad_app/firebase_options.dart'; // name project folder (madad_app) 
+import 'package:madad_app/firebase_options.dart';
 
 import 'welcome_page.dart';
 import 'login_page.dart';
@@ -57,7 +57,17 @@ class MyApp extends StatelessWidget {
   },
         '/addDonation': (context) => const AddDonationPage(),
         '/viewDonation': (context) => const ViewDonationPage(),
-      },
+       // '/editDonation': (context) => const EditDonationPage(),
+
+
+'/donorMore': (context) {
+  final email =
+      ModalRoute.of(context)!.settings.arguments as String;
+
+  return DonorMorePage(
+    userEmail: email,
+  );
+},      },
     );
   }
 }
