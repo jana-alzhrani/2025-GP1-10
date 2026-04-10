@@ -53,14 +53,16 @@ Future<void> _loadHomeData() async {
     final donationsFuture =
         FirebaseFirestore.instance.collection('donations').get();
 
-    final beneficiariesFuture =
-        FirebaseFirestore.instance.collection('beneficiaries').get();
+    final beneficiariesUsersFuture = FirebaseFirestore.instance
+        .collection('Users')
+        .where('role', isEqualTo: 'beneficiary') // غيّريها إذا عندكم "مستفيد"
+        .get();
 
     final results = await Future.wait([
       userFuture,
       donorsFuture,
       donationsFuture,
-      beneficiariesFuture,
+      beneficiariesUsersFuture,
     ]);
 
     if (!mounted) return;
@@ -69,7 +71,7 @@ Future<void> _loadHomeData() async {
     final donorsSnapshot = results[1] as QuerySnapshot<Map<String, dynamic>>;
     final donationsSnapshot =
         results[2] as QuerySnapshot<Map<String, dynamic>>;
-    final beneficiariesSnapshot =
+    final beneficiariesUsersSnapshot =
         results[3] as QuerySnapshot<Map<String, dynamic>>;
 
     String fetchedUserName = 'مستخدم';
@@ -104,14 +106,11 @@ Future<void> _loadHomeData() async {
     setState(() {
       userName = fetchedUserName;
 
-      // عدد المتبرعين من مجموعة donors
       donorsCount = donorsSnapshot.docs.length;
 
-      // كل 5 عناصر مكتملة = كسوة واحدة
       clothingCount = totalCompletedItems ~/ 5;
 
-      // عدد الأسر من مجموعة beneficiaries
-      familiesCount = beneficiariesSnapshot.docs.length;
+      familiesCount = beneficiariesUsersSnapshot.docs.length;
     });
   } catch (e) {
     debugPrint('Error loading home data: $e');
