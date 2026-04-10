@@ -6,10 +6,12 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
+import 'app_design.dart';
+
 class EditDonationPage extends StatefulWidget {
   final String donationId;
   final String? initialGender;
-  final Map<String, dynamic>? initialAgeGroup;
+  final String? initialAgeGroupLabel;
   final int initialItemCount;
   final Map<int, List<Map<String, dynamic>>>? initialBoxes;
 
@@ -17,7 +19,7 @@ class EditDonationPage extends StatefulWidget {
     super.key,
     required this.donationId,
     this.initialGender,
-    this.initialAgeGroup,
+    this.initialAgeGroupLabel,
     required this.initialItemCount,
     this.initialBoxes,
   });
@@ -28,13 +30,14 @@ class EditDonationPage extends StatefulWidget {
 
 class _EditDonationPageState extends State<EditDonationPage> {
   bool inputsLocked = false;
+  bool isLoadingBoxes = true;
 
   String? selectedGender;
   Map<String, dynamic>? selectedAgeGroup;
 
   final TextEditingController _itemCountController = TextEditingController();
 
-  final String _apiKey = '';
+  final String _apiKey = 'AIzaSyAW2Lf2LnCgUyrMoBQ6fK9qwmrveCUf6CE';
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
 
   int totalItems = 0;
@@ -53,12 +56,25 @@ class _EditDonationPageState extends State<EditDonationPage> {
     {'label': 'بالغون (18+)', 'min': 18, 'max': 120},
   ];
 
+  Map<String, dynamic>? _findAgeGroupByLabel(String? label) {
+    if (label == null || label.trim().isEmpty) return null;
+
+    try {
+      return ageGroups.firstWhere(
+        (age) => age['label'].toString().trim() == label.trim(),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
 
     selectedGender = widget.initialGender;
-    selectedAgeGroup = widget.initialAgeGroup;
+    selectedAgeGroup = _findAgeGroupByLabel(widget.initialAgeGroupLabel);
+
     totalItems = widget.initialItemCount;
     _itemCountController.text =
         widget.initialItemCount == 0 ? '' : widget.initialItemCount.toString();
@@ -73,17 +89,79 @@ class _EditDonationPageState extends State<EditDonationPage> {
         ),
       );
       totalBoxes = boxes.length;
-    } else if (widget.initialItemCount > 0) {
-      _updateItemCount(widget.initialItemCount.toString());
+      savedBoxes = boxes.keys.toSet();
+      isLoadingBoxes = false;
+    } else {
+      if (widget.initialItemCount > 0) {
+        _updateItemCount(widget.initialItemCount.toString());
+      }
+      _loadDonationBoxes();
     }
-
-    savedBoxes = boxes.keys.toSet();
   }
 
   @override
   void dispose() {
     _itemCountController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadDonationBoxes() async {
+    try {
+      final snapshot = await firestore
+          .collection('donation_boxes')
+          .where('donationId', isEqualTo: widget.donationId)
+          .get();
+
+      final Map<int, List<Map<String, dynamic>>> loadedBoxes = {};
+
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final int boxNumber = (data['boxNumber'] ?? 0) as int;
+        final List<dynamic> items = data['items'] ?? [];
+
+        loadedBoxes[boxNumber] = items.map((item) {
+          final map = Map<String, dynamic>.from(item);
+
+          Uint8List? imageBytes;
+          if (map['imageBase64'] != null &&
+              map['imageBase64'].toString().isNotEmpty) {
+            try {
+              imageBytes = base64Decode(map['imageBase64']);
+            } catch (_) {
+              imageBytes = null;
+            }
+          }
+
+          return {
+            'image': imageBytes,
+            'type': map['type'],
+            'isValid': imageBytes != null,
+            'error': null,
+          };
+        }).toList();
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        if (loadedBoxes.isNotEmpty) {
+          boxes = loadedBoxes;
+          totalBoxes = loadedBoxes.length;
+          savedBoxes = loadedBoxes.keys.toSet();
+        }
+        isLoadingBoxes = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isLoadingBoxes = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('فشل تحميل محتوى التبرع: $e')),
+      );
+    }
   }
 
   void _updateItemCount(String value) {
@@ -163,7 +241,10 @@ class _EditDonationPageState extends State<EditDonationPage> {
   }
 
   Future<void> _verifyImageWithGemini(
-      int box, int index, Uint8List imageBytes) async {
+    int box,
+    int index,
+    Uint8List imageBytes,
+  ) async {
     setState(() {
       boxes[box]![index]['error'] = "جاري الفحص...";
     });
@@ -280,20 +361,50 @@ class _EditDonationPageState extends State<EditDonationPage> {
     try {
       await firestore.collection('donations').doc(widget.donationId).update({
         'gender': selectedGender,
-        'ageGroup': {
-          'label': selectedAgeGroup!['label'],
-          'min': selectedAgeGroup!['min'],
-          'max': selectedAgeGroup!['max'],
-        },
+        'ageGroup': selectedAgeGroup!['label'],
         'numberOfItems': totalItems,
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
+      final oldBoxes = await firestore
+          .collection('donation_boxes')
+          .where('donationId', isEqualTo: widget.donationId)
+          .get();
+
+      for (final doc in oldBoxes.docs) {
+        await doc.reference.delete();
+      }
+
+      for (final entry in boxes.entries) {
+        final int boxNumber = entry.key;
+        final List<Map<String, dynamic>> items = entry.value;
+
+        await firestore.collection('donation_boxes').add({
+          'donationId': widget.donationId,
+          'boxNumber': boxNumber,
+          'gender': selectedGender,
+          'ageGroup': {
+            'label': selectedAgeGroup!['label'],
+            'min': selectedAgeGroup!['min'],
+            'max': selectedAgeGroup!['max'],
+          },
+          'items': items.map((e) {
+            return {
+              'type': e['type'],
+              'imageBase64': e['image'] != null
+                  ? base64Encode(e['image'] as Uint8List)
+                  : '',
+            };
+          }).toList(),
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+      }
+
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('تم حفظ التغييرات بنجاح')),
       );
 
-      if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -302,380 +413,85 @@ class _EditDonationPageState extends State<EditDonationPage> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    const primaryColor = Color(0xFF123A66);
-    const secondaryColor = Color(0xFF8ED0F8);
-    const lightBlue = Color(0xFFDFF4FF);
-    const pageBackground = Color(0xFFF6FBFF);
+  Widget _buildTopInfoCard() {
+    return Container(
+      width: double.infinity,
+      padding: AppPadding.card,
+      decoration: AppDesign.primaryCardDecoration,
+      child: Row(
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: AppDesign.surfaceAlt,
+              shape: BoxShape.circle,
+              border: Border.all(color: AppDesign.border),
+            ),
+            child: const Icon(
+              Icons.edit_note_rounded,
+              color: AppDesign.primary,
+              size: AppDesign.iconMD,
+            ),
+          ),
+          AppGap.wMD,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  'تعديل التبرع',
+                  textAlign: TextAlign.right,
+                  style: AppDesign.h2Style.copyWith(
+                    color: AppDesign.primary,
+                  ),
+                ),
+                AppGap.xs,
+                Text(
+                  'يمكنك تعديل بيانات التبرع والصناديق ثم حفظ التغييرات.',
+                  textAlign: TextAlign.right,
+                  style: AppDesign.bodySecondaryStyle,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        backgroundColor: pageBackground,
-        appBar: AppBar(
-          title: const Text("تعديل التبرع"),
-          centerTitle: true,
-          elevation: 0,
-          backgroundColor: Colors.white,
-          foregroundColor: primaryColor,
+  Widget _buildBoxTile(int boxNum) {
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          openedBox = boxNum;
+          inputsLocked = true;
+        });
+      },
+      child: Container(
+        decoration: AppDesign.primaryCardDecoration.copyWith(
+          color: AppDesign.surface,
         ),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
+        child: Center(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              DropdownButtonFormField<String>(
-                decoration: InputDecoration(
-                  labelText: "الجنس",
-                  prefixIcon: const Icon(Icons.person, color: primaryColor),
-                  filled: true,
-                  fillColor: openedBox == null ? Colors.white : Colors.grey[200],
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(18),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(18),
-                    borderSide:
-                        const BorderSide(color: lightBlue, width: 1.5),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(18),
-                    borderSide:
-                        const BorderSide(color: primaryColor, width: 2),
-                  ),
-                ),
-                items: ["ذكر", "أنثى"]
-                    .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                    .toList(),
-                onChanged: (v) => setState(() => selectedGender = v),
-                value: selectedGender,
+              const Icon(
+                Icons.inventory_2_outlined,
+                color: AppDesign.primary,
+                size: AppDesign.iconLG,
               ),
-              const SizedBox(height: 14),
-              DropdownButtonFormField<Map<String, dynamic>>(
-                decoration: InputDecoration(
-                  labelText: "الفئة العمرية",
-                  prefixIcon: const Icon(Icons.cake, color: primaryColor),
-                  filled: true,
-                  fillColor: openedBox == null ? Colors.white : Colors.grey[200],
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(18),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(18),
-                    borderSide:
-                        const BorderSide(color: lightBlue, width: 1.5),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(18),
-                    borderSide:
-                        const BorderSide(color: primaryColor, width: 2),
-                  ),
-                ),
-                items: ageGroups.map((age) {
-                  return DropdownMenuItem(
-                    value: age,
-                    child: Text(age['label']),
-                  );
-                }).toList(),
-                onChanged: (v) => setState(() => selectedAgeGroup = v),
-                value: selectedAgeGroup,
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: _itemCountController,
-                keyboardType: TextInputType.number,
-                onChanged: inputsLocked ? null : _updateItemCount,
-                enabled: !inputsLocked,
-                decoration: InputDecoration(
-                  labelText: "إجمالي عدد القطع",
-                  floatingLabelBehavior: FloatingLabelBehavior.always,
-                  filled: true,
-                  fillColor: openedBox == null ? Colors.white : Colors.grey[200],
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(
-                      color: openedBox == null ? lightBlue : Colors.grey,
-                      width: 1.5,
-                    ),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide:
-                        const BorderSide(color: primaryColor, width: 2),
-                  ),
+              AppGap.sm,
+              Text(
+                "صندوق $boxNum",
+                style: AppDesign.bodyStyle.copyWith(
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(height: 16),
-              if (totalBoxes > 0 && openedBox == null)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "اختر صندوقًا لتعديل محتواه:",
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: totalBoxes,
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3,
-                        mainAxisSpacing: 10,
-                        crossAxisSpacing: 10,
-                        childAspectRatio: 1,
-                      ),
-                      itemBuilder: (context, idx) {
-                        final boxNum = idx + 1;
-
-                        return GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              openedBox = boxNum;
-                              inputsLocked = true;
-                            });
-                          },
-                          child: Container(
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [lightBlue, secondaryColor],
-                              ),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: primaryColor,
-                                width: 2,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.08),
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Icon(
-                                    Icons.inventory_2,
-                                    color: primaryColor,
-                                    size: 32,
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    "صندوق $boxNum",
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
-                                      color: Colors.black87,
-                                    ),
-                                  ),
-                                  Text(
-                                    "${boxes[boxNum]?.length ?? 0} قطع",
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.black54,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              if (openedBox != null)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        TextButton.icon(
-                          onPressed: () {
-                            setState(() {
-                              openedBox = null;
-                            });
-                          },
-                          icon: const Icon(Icons.arrow_back,
-                              color: primaryColor),
-                          label: const Text(
-                            "رجوع",
-                            style: TextStyle(
-                              color: primaryColor,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: Center(
-                            child: Text(
-                              "الصندوق رقم $openedBox",
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 70),
-                      ],
-                    ),
-                    ...boxes[openedBox]!.asMap().entries.map((entry) {
-                      final idx = entry.key;
-                      final item = entry.value;
-
-                      return Card(
-                        elevation: 3,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          side: BorderSide(
-                            color: item['error'] != null
-                                ? Colors.red
-                                : primaryColor,
-                            width: 1.5,
-                          ),
-                        ),
-                        margin: const EdgeInsets.symmetric(vertical: 8),
-                        child: Padding(
-                          padding: const EdgeInsets.all(10),
-                          child: Column(
-                            children: [
-                              Text("القطعة رقم ${idx + 1}"),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  GestureDetector(
-                                    onTap: () => _pickItemImage(openedBox!, idx),
-                                    child: Container(
-                                      height: 100,
-                                      width: 100,
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey[200],
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(
-                                          color: primaryColor,
-                                          width: 2,
-                                        ),
-                                      ),
-                                      child: item['image'] == null
-                                          ? Column(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.center,
-                                              children: const [
-                                                Icon(
-                                                  Icons.upload_file,
-                                                  color: primaryColor,
-                                                  size: 36,
-                                                ),
-                                                SizedBox(height: 4),
-                                                Text(
-                                                  "انقر لرفع الصورة",
-                                                  textAlign: TextAlign.center,
-                                                  style: TextStyle(
-                                                    color: primaryColor,
-                                                    fontSize: 10,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                ),
-                                              ],
-                                            )
-                                          : ClipRRect(
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                              child: Image.memory(
-                                                item['image'],
-                                                fit: BoxFit.cover,
-                                              ),
-                                            ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: DropdownButton<String>(
-                                      hint: const Text("نوع القطعة"),
-                                      value: item['type'],
-                                      items: [
-                                        "قميص",
-                                        "بنطلون",
-                                        "فستان",
-                                        "معطف",
-                                        "حذاء",
-                                        "حقيبة",
-                                        "قبعة"
-                                      ]
-                                          .map(
-                                            (e) => DropdownMenuItem(
-                                              value: e,
-                                              child: Text(e),
-                                            ),
-                                          )
-                                          .toList(),
-                                      onChanged: (v) => setState(() {
-                                        boxes[openedBox]![idx]['type'] = v;
-                                      }),
-                                      isExpanded: true,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              if (item['error'] != null)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 8),
-                                  child: Text(
-                                    item['error'] ?? '',
-                                    style: const TextStyle(
-                                      color: Colors.red,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }),
-                  ],
-                ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryColor,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  onPressed: _saveChanges,
-                  child: const Text(
-                    "حفظ التغييرات",
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
+              AppGap.xs,
+              Text(
+                "${boxes[boxNum]?.length ?? 0} قطع",
+                style: AppDesign.captionStyle,
               ),
             ],
           ),
@@ -683,5 +499,289 @@ class _EditDonationPageState extends State<EditDonationPage> {
       ),
     );
   }
-  
+
+  Widget _buildItemCard(int idx, Map<String, dynamic> item) {
+    return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppDesign.radiusMD),
+        side: BorderSide(
+          color: item['error'] != null ? AppDesign.error : AppDesign.border,
+          width: 1.2,
+        ),
+      ),
+      margin: const EdgeInsets.symmetric(vertical: AppDesign.spaceSM),
+      child: Padding(
+        padding: AppPadding.card,
+        child: Column(
+          children: [
+            Text(
+              "القطعة رقم ${idx + 1}",
+              style: AppDesign.subtitleStyle.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            AppGap.sm,
+            Row(
+              children: [
+                GestureDetector(
+                  onTap: () => _pickItemImage(openedBox!, idx),
+                  child: Container(
+                    height: 104,
+                    width: 104,
+                    decoration: BoxDecoration(
+                      color: AppDesign.surfaceAlt,
+                      borderRadius: BorderRadius.circular(AppDesign.radiusSM),
+                      border: Border.all(color: AppDesign.border),
+                    ),
+                    child: item['image'] == null
+                        ? Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.upload_file_rounded,
+                                color: AppDesign.primary,
+                                size: AppDesign.iconLG,
+                              ),
+                              AppGap.xs,
+                              Text(
+                                "انقر لرفع الصورة",
+                                textAlign: TextAlign.center,
+                                style: AppDesign.captionStyle.copyWith(
+                                  color: AppDesign.primary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          )
+                        : ClipRRect(
+                            borderRadius:
+                                BorderRadius.circular(AppDesign.radiusSM),
+                            child: Image.memory(
+                              item['image'] as Uint8List,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                  ),
+                ),
+                AppGap.wMD,
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: item['type'] as String?,
+                    decoration: const InputDecoration(
+                      labelText: "نوع القطعة",
+                    ),
+                    items: const [
+                      "قميص",
+                      "بنطلون",
+                      "فستان",
+                      "معطف",
+                      "حذاء",
+                      "حقيبة",
+                      "قبعة"
+                    ]
+                        .map(
+                          (e) => DropdownMenuItem<String>(
+                            value: e,
+                            child: Text(e),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) => setState(() {
+                      boxes[openedBox]![idx]['type'] = v;
+                    }),
+                  ),
+                ),
+              ],
+            ),
+            if (item['error'] != null) ...[
+              AppGap.sm,
+              Text(
+                item['error'] ?? '',
+                style: AppDesign.captionStyle.copyWith(
+                  color: AppDesign.error,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(
+            'تعديل التبرع',
+            style: AppDesign.h2Style.copyWith(
+              color: AppDesign.textPrimary,
+            ),
+          ),
+          centerTitle: true,
+          backgroundColor: AppDesign.background,
+          foregroundColor: AppDesign.textPrimary,
+        ),
+        backgroundColor: AppDesign.background,
+        body: isLoadingBoxes
+            ? const Center(child: CircularProgressIndicator())
+            : SingleChildScrollView(
+                padding: AppPadding.screen,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildTopInfoCard(),
+                    AppGap.section,
+
+                    DropdownButtonFormField<String>(
+                      value: selectedGender,
+                      decoration: InputDecoration(
+                        labelText: "الجنس",
+                        prefixIcon: const Icon(
+                          Icons.person_outline,
+                          color: AppDesign.primary,
+                        ),
+                        fillColor: openedBox == null
+                            ? AppDesign.surface
+                            : AppDesign.surfaceAlt,
+                      ),
+                      items: ["ذكر", "أنثى"]
+                          .map(
+                            (e) => DropdownMenuItem<String>(
+                              value: e,
+                              child: Text(e),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: openedBox != null
+                          ? null
+                          : (v) => setState(() => selectedGender = v),
+                    ),
+                    AppGap.lg,
+
+                    DropdownButtonFormField<Map<String, dynamic>>(
+                      value: selectedAgeGroup,
+                      decoration: InputDecoration(
+                        labelText: "الفئة العمرية",
+                        prefixIcon: const Icon(
+                          Icons.cake_outlined,
+                          color: AppDesign.primary,
+                        ),
+                        fillColor: openedBox == null
+                            ? AppDesign.surface
+                            : AppDesign.surfaceAlt,
+                      ),
+                      items: ageGroups.map((age) {
+                        return DropdownMenuItem<Map<String, dynamic>>(
+                          value: age,
+                          child: Text(age['label']),
+                        );
+                      }).toList(),
+                      onChanged: openedBox != null
+                          ? null
+                          : (v) => setState(() => selectedAgeGroup = v),
+                    ),
+                    AppGap.lg,
+
+                    TextField(
+                      controller: _itemCountController,
+                      keyboardType: TextInputType.number,
+                      onChanged: inputsLocked ? null : _updateItemCount,
+                      enabled: !inputsLocked,
+                      decoration: InputDecoration(
+                        labelText: "إجمالي عدد القطع",
+                        prefixIcon: const Icon(
+                          Icons.format_list_numbered_rounded,
+                          color: AppDesign.primary,
+                        ),
+                        fillColor: openedBox == null
+                            ? AppDesign.surface
+                            : AppDesign.surfaceAlt,
+                      ),
+                    ),
+                    AppGap.section,
+
+                    if (totalBoxes > 0 && openedBox == null)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "اختر صندوقًا لتعديل محتواه:",
+                            style: AppDesign.subtitleStyle.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          AppGap.md,
+                          GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: totalBoxes,
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 3,
+                              mainAxisSpacing: AppDesign.spaceMD,
+                              crossAxisSpacing: AppDesign.spaceMD,
+                              childAspectRatio: 1,
+                            ),
+                            itemBuilder: (context, idx) {
+                              final boxNum = idx + 1;
+                              return _buildBoxTile(boxNum);
+                            },
+                          ),
+                        ],
+                      ),
+
+                    if (openedBox != null)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              TextButton.icon(
+                                onPressed: () {
+                                  setState(() {
+                                    openedBox = null;
+                                    inputsLocked = false;
+                                  });
+                                },
+                                icon: const Icon(Icons.arrow_back),
+                                label: const Text("رجوع"),
+                              ),
+                              Expanded(
+                                child: Center(
+                                  child: Text(
+                                    "الصندوق رقم $openedBox",
+                                    style: AppDesign.h2Style.copyWith(
+                                      fontSize: 18,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 70),
+                            ],
+                          ),
+                          AppGap.sm,
+                          ...boxes[openedBox]!
+                              .asMap()
+                              .entries
+                              .map((entry) => _buildItemCard(entry.key, entry.value)),
+                        ],
+                      ),
+
+                    AppGap.section,
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _saveChanges,
+                        child: const Text("حفظ التغييرات"),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+      ),
+    );
+  }
 }
