@@ -1,16 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:madad_app/firebase_options.dart'; // name project folder (madad_app) 
 
 import 'welcome_page.dart';
 import 'login_page.dart';
 import 'signup_page.dart';
 import 'donor_home_page.dart';
-import 'donor_more_page.dart';
 import 'edit_donation_page.dart';
 import 'view_donation_page.dart';
 import 'add_donation_page.dart';
+import 'donor_more_page.dart';
+import 'app_design.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(const MyApp());
 }
 
@@ -26,6 +35,10 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
 
+
+  theme: AppDesign.lightTheme,
+
+
       // Decide first page based on login state
       initialRoute: user == null ? '/' : '/donorHome',
 
@@ -33,17 +46,17 @@ class MyApp extends StatelessWidget {
 
         // Authentication
         '/': (context) => const WelcomePage(),
-        '/login': (context) => const LoginPage(),
-        '/signup': (context) => const SignUpPage(),
+        '/login': (context) =>  LoginPage(),
+        '/signup': (context) =>  SignUpPage(),
 
         // Donor pages
-        '/donorHome': (context) => const DonorHomePage(),
-        '/donorMore': (context) => const DonorMorePage(),
+        '/donorHome': (context) {
+    final email = ModalRoute.of(context)!.settings.arguments as String;
 
-        // Donation pages
+    return DonorHomePage(userEmail: email);
+  },
         '/addDonation': (context) => const AddDonationPage(),
         '/viewDonation': (context) => const ViewDonationPage(),
-        '/editDonation': (context) => const EditDonationPage(),
       },
     );
   }
