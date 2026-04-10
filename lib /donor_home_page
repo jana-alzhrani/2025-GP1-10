@@ -28,12 +28,10 @@ class _DonorHomePageState extends State<DonorHomePage> {
   int _currentCardIndex = 0;
   int _bottomNavIndex = 0;
 
-  String userName = '...';
-  int clothingCount = 0;
+  String userName = 'مستخدم';
   int donorsCount = 0;
+  int clothingCount = 0;
   int familiesCount = 0;
-
-  bool isLoading = true;
 
   @override
   void initState() {
@@ -51,49 +49,74 @@ class _DonorHomePageState extends State<DonorHomePage> {
     try {
       final normalizedEmail = widget.userEmail.trim().toLowerCase();
 
-      final userQuery = await FirebaseFirestore.instance
+      final userFuture = FirebaseFirestore.instance
           .collection('Users')
           .where('email', isEqualTo: normalizedEmail)
           .limit(1)
           .get();
 
-      final donorsSnapshot =
-          await FirebaseFirestore.instance.collection('donors').get();
+      final donationsFuture =
+          FirebaseFirestore.instance.collection('donations').get();
 
-      final itemsSnapshot =
-          await FirebaseFirestore.instance.collection('items').get();
+      final beneficiariesFuture =
+          FirebaseFirestore.instance.collection('beneficiaries').get();
 
-      final beneficiariesSnapshot =
-          await FirebaseFirestore.instance.collection('beneficiaries').get();
+      final results = await Future.wait([
+        userFuture,
+        donationsFuture,
+        beneficiariesFuture,
+      ]);
 
       if (!mounted) return;
+
+      final userQuery = results[0] as QuerySnapshot<Map<String, dynamic>>;
+      final donationsSnapshot = results[1] as QuerySnapshot<Map<String, dynamic>>;
+      final beneficiariesSnapshot =
+          results[2] as QuerySnapshot<Map<String, dynamic>>;
 
       String fetchedUserName = 'مستخدم';
 
       if (userQuery.docs.isNotEmpty) {
         final data = userQuery.docs.first.data();
-        fetchedUserName = (data['firstName'] ?? 'مستخدم').toString();
+        final firstName = (data['firstName'] ?? '').toString().trim();
+        final lastName = (data['lastName'] ?? '').toString().trim();
+        final fullName = '$firstName $lastName'.trim();
+        fetchedUserName = fullName.isEmpty ? 'مستخدم' : fullName;
+      }
+
+      final Set<String> uniqueDonors = {};
+      int totalCompletedItems = 0;
+
+      for (final doc in donationsSnapshot.docs) {
+        final data = doc.data();
+
+        final donorId = (data['donorID'] ?? '').toString().trim();
+        if (donorId.isNotEmpty) {
+          uniqueDonors.add(donorId);
+        }
+
+        final status = (data['status'] ?? '').toString().trim().toLowerCase();
+        if (status == 'completed') {
+          final value = data['numberOfItems'];
+
+          if (value is int) {
+            totalCompletedItems += value;
+          } else if (value is double) {
+            totalCompletedItems += value.toInt();
+          } else if (value is String) {
+            totalCompletedItems += int.tryParse(value) ?? 0;
+          }
+        }
       }
 
       setState(() {
         userName = fetchedUserName;
-        donorsCount = donorsSnapshot.docs.length;
-        clothingCount = itemsSnapshot.docs.length;
+        donorsCount = uniqueDonors.length;
+        clothingCount = totalCompletedItems;
         familiesCount = beneficiariesSnapshot.docs.length;
-        isLoading = false;
       });
     } catch (e) {
       debugPrint('Error loading home data: $e');
-
-      if (!mounted) return;
-
-      setState(() {
-        userName = 'مستخدم';
-        donorsCount = 0;
-        clothingCount = 0;
-        familiesCount = 0;
-        isLoading = false;
-      });
     }
   }
 
@@ -104,38 +127,34 @@ class _DonorHomePageState extends State<DonorHomePage> {
       child: Scaffold(
         backgroundColor: AppColors.background,
         body: SafeArea(
-          child: _buildHomeContent(),
+          child: RefreshIndicator(
+            onRefresh: _loadHomeData,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeader(),
+                  const SizedBox(height: 20),
+                  _buildWelcomeStrip(),
+                  const SizedBox(height: 24),
+                  _buildCardsSlider(),
+                  const SizedBox(height: 12),
+                  _buildSliderDots(),
+                  const SizedBox(height: 18),
+                  _buildDonateSection(),
+                  const SizedBox(height: 28),
+                  _buildStatsSection(),
+                  const SizedBox(height: 24),
+                  _buildVerse(),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
+          ),
         ),
         bottomNavigationBar: _buildBottomNavigationBar(),
-      ),
-    );
-  }
-
-  Widget _buildHomeContent() {
-    return RefreshIndicator(
-      onRefresh: _loadHomeData,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeader(),
-            const SizedBox(height: 20),
-            _buildWelcomeStrip(),
-            const SizedBox(height: 24),
-            _buildCardsSlider(),
-            const SizedBox(height: 12),
-            _buildSliderDots(),
-            const SizedBox(height: 18),
-            _buildDonateSection(),
-            const SizedBox(height: 28),
-            _buildStatsSection(),
-            const SizedBox(height: 24),
-            _buildVerse(),
-            const SizedBox(height: 8),
-          ],
-        ),
       ),
     );
   }
@@ -256,9 +275,9 @@ class _DonorHomePageState extends State<DonorHomePage> {
         title: 'خطوة منك.. حياة أدفأ لهم',
         subtitle:
             'كن جزءًا من عطاء يصل لمستحقيه ويصنع أثرًا حقيقيًا يستمر مع كل مساهمة.',
-        background: AppColors.pattern,
-        titleColor: AppColors.primary,
-        subtitleColor: AppColors.primary,
+        background: AppColors.primary,
+        titleColor: Colors.white,
+        subtitleColor: Colors.white,
         accentColor: AppColors.accent,
         icon: Icons.family_restroom_rounded,
       ),
@@ -325,7 +344,11 @@ class _DonorHomePageState extends State<DonorHomePage> {
           height: 56,
           child: ElevatedButton(
             onPressed: () {
-              Navigator.pushNamed(context, '/addDonation');
+              Navigator.pushNamed(
+                context,
+                '/addDonation',
+                arguments: widget.userEmail,
+              );
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.accent,
@@ -361,41 +384,32 @@ class _DonorHomePageState extends State<DonorHomePage> {
           ),
         ),
         const SizedBox(height: 16),
-        if (isLoading)
-          const Center(
-            child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
-              child: CircularProgressIndicator(),
+        Row(
+          children: [
+            Expanded(
+              child: _StatCard(
+                title: 'عدد المتبرعين',
+                value: '$donorsCount',
+                icon: Icons.volunteer_activism_outlined,
+              ),
             ),
-          )
-        else ...[
-          Row(
-            children: [
-              Expanded(
-                child: _StatCard(
-                  title: 'عدد المتبرعين',
-                  value: '$donorsCount',
-                  icon: Icons.volunteer_activism_outlined,
-                ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _StatCard(
+                title: 'الكسوات المقدمة',
+                value: '$clothingCount',
+                icon: Icons.checkroom_rounded,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _StatCard(
-                  title: 'الكسوات المقدمة',
-                  value: '$clothingCount',
-                  icon: Icons.checkroom_rounded,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _StatCard(
-            title: 'الأسر المستفيدة',
-            value: '$familiesCount',
-            icon: Icons.home_work_rounded,
-            fullWidth: true,
-          ),
-        ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _StatCard(
+          title: 'الأسر المستفيدة',
+          value: '$familiesCount',
+          icon: Icons.home_work_rounded,
+          fullWidth: true,
+        ),
       ],
     );
   }
@@ -443,9 +457,17 @@ class _DonorHomePageState extends State<DonorHomePage> {
           });
 
           if (index == 1) {
-            Navigator.pushNamed(context, '/viewDonation');
+            Navigator.pushReplacementNamed(
+              context,
+              '/viewDonation',
+              arguments: widget.userEmail,
+            );
           } else if (index == 2) {
-            Navigator.pushNamed(context, '/more');
+            Navigator.pushReplacementNamed(
+              context,
+              '/donorMore',
+              arguments: widget.userEmail,
+            );
           }
         },
         destinations: const [
@@ -467,7 +489,8 @@ class _DonorHomePageState extends State<DonorHomePage> {
           ),
           NavigationDestination(
             icon: Icon(Icons.more_horiz_rounded, color: AppColors.primary),
-            selectedIcon: Icon(Icons.more_horiz_rounded, color: AppColors.primary),
+            selectedIcon:
+                Icon(Icons.more_horiz_rounded, color: AppColors.primary),
             label: 'المزيد',
           ),
         ],
@@ -503,9 +526,7 @@ class _DonationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final subtitleColor = data.subtitleColor.withOpacity(
-      data.background == AppColors.pattern ? 0.82 : 0.92,
-    );
+    final subtitleColor = data.subtitleColor.withOpacity(0.92);
 
     return Container(
       padding: const EdgeInsets.all(22),
