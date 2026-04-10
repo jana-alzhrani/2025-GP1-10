@@ -14,19 +14,20 @@ class _SignUpPageState extends State<SignUpPage> {
   final lastName = TextEditingController();
   final email = TextEditingController();
   final phone = TextEditingController();
+  final password = TextEditingController();
+  final confirmPassword = TextEditingController();
 
   // إرسال OTP
   Future<void> sendEmailOTP(String emailText) async {
     try {
-      // توليد الكود هنا
       String otp = (100000 + Random().nextInt(900000)).toString();
 
-      final functions = FirebaseFunctions.instance;
-      final callable = functions.httpsCallable('sendSignupOtp');
+      final callable = FirebaseFunctions.instance.httpsCallable(
+        'sendSignupOtp',
+      );
 
       await callable.call({"email": emailText, "otp": otp});
 
-      // الانتقال لصفحة OTP
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -37,6 +38,7 @@ class _SignUpPageState extends State<SignUpPage> {
             email: emailText,
             phone: phone.text.trim(),
             isLogin: false,
+            password: password.text,
           ),
         ),
       );
@@ -44,7 +46,6 @@ class _SignUpPageState extends State<SignUpPage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text("فشل إرسال الكود ❌")));
-      print(e);
     }
   }
 
@@ -52,16 +53,27 @@ class _SignUpPageState extends State<SignUpPage> {
     String phoneText = phone.text.trim();
     String emailText = email.text.trim();
 
+    //  تحقق الحقول
     if (firstName.text.isEmpty ||
         lastName.text.isEmpty ||
         emailText.isEmpty ||
-        phoneText.isEmpty) {
+        phoneText.isEmpty ||
+        password.text.isEmpty ||
+        confirmPassword.text.isEmpty) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text("الرجاء تعبئة جميع الحقول")));
       return;
     }
 
+    if (password.text.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("كلمة المرور لازم تكون 6 خانات على الأقل")),
+      );
+      return;
+    }
+
+    //  تحقق الإيميل
     if (!emailText.contains('@')) {
       ScaffoldMessenger.of(
         context,
@@ -69,6 +81,7 @@ class _SignUpPageState extends State<SignUpPage> {
       return;
     }
 
+    //  تحقق رقم الجوال
     if (phoneText.length != 10 || !phoneText.startsWith('05')) {
       ScaffoldMessenger.of(
         context,
@@ -76,6 +89,15 @@ class _SignUpPageState extends State<SignUpPage> {
       return;
     }
 
+    //تحقق الباسورد
+    if (password.text != confirmPassword.text) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("كلمتا المرور غير متطابقة")));
+      return;
+    }
+
+    // تحقق تكرار الإيميل
     var existingEmail = await FirebaseFirestore.instance
         .collection('Users')
         .where('email', isEqualTo: emailText)
@@ -88,6 +110,7 @@ class _SignUpPageState extends State<SignUpPage> {
       return;
     }
 
+    //  تحقق تكرار الجوال
     var existingUser = await FirebaseFirestore.instance
         .collection('Users')
         .where('phone', isEqualTo: phoneText)
@@ -155,6 +178,22 @@ class _SignUpPageState extends State<SignUpPage> {
               ),
 
               SizedBox(height: 20),
+
+              TextField(
+                controller: password,
+                obscureText: true,
+                decoration: InputDecoration(labelText: "كلمة المرور"),
+              ),
+
+              SizedBox(height: 20),
+
+              TextField(
+                controller: confirmPassword,
+                obscureText: true,
+                decoration: InputDecoration(labelText: "تأكيد كلمة المرور"),
+              ),
+
+              SizedBox(height: 30),
 
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
