@@ -1,30 +1,33 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'dart:math';
 import 'signup_page.dart';
 import 'otp_page.dart';
 
 class LoginPage extends StatefulWidget {
+  const LoginPage({super.key});
+
   @override
   _LoginPageState createState() => _LoginPageState();
 }
 
 class _LoginPageState extends State<LoginPage> {
   final email = TextEditingController();
+  final password = TextEditingController();
 
-  Future<void> sendLoginOTP() async {
+  Future<void> login() async {
     String emailText = email.text.trim().toLowerCase();
 
-    //  تحقق من الحقل
-    if (emailText.isEmpty) {
+    // تحقق من الحقول
+    if (emailText.isEmpty || password.text.isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text("أدخل البريد الإلكتروني")));
+      ).showSnackBar(SnackBar(content: Text("أدخل الإيميل وكلمة المرور")));
       return;
     }
 
-    // تحقق من صحة الإيميل
+    //  تحقق من الإيميل
     if (!emailText.contains('@')) {
       ScaffoldMessenger.of(
         context,
@@ -32,32 +35,24 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    // تحقق إذا الإيميل موجود
-    var user = await FirebaseFirestore.instance
-        .collection('Users')
-        .where('email', isEqualTo: emailText)
-        .get();
-
-    if (user.docs.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("هذا الإيميل غير مسجل")));
-      return;
-    }
-
-    // توليد OTP
-    String otp = (100000 + Random().nextInt(900000)).toString();
-
-    //  (try/catch)
     try {
+      //  تحقق من الباسورد
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: emailText,
+        password: password.text,
+      );
+
+      //  توليد OTP
+      String otp = (100000 + Random().nextInt(900000)).toString();
+
+      //  إرسال OTP
       final callable = FirebaseFunctions.instance.httpsCallable(
         'sendSignupOtp',
       );
 
       await callable.call({"email": emailText, "otp": otp});
 
-      print("OTP SENT ✅");
-
+      // الانتقال لصفحة OTP
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -68,15 +63,14 @@ class _LoginPageState extends State<LoginPage> {
             email: emailText,
             phone: '',
             isLogin: true,
+            password: password.text,
           ),
         ),
       );
     } catch (e) {
-      print("ERROR: $e");
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("فشل إرسال الكود ❌")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("الإيميل أو كلمة المرور غير صحيحة ❌")),
+      );
     }
   }
 
@@ -110,6 +104,15 @@ class _LoginPageState extends State<LoginPage> {
                 decoration: InputDecoration(labelText: "البريد الإلكتروني"),
               ),
 
+              SizedBox(height: 20),
+
+              //  كلمة المرور
+              TextField(
+                controller: password,
+                obscureText: true,
+                decoration: InputDecoration(labelText: "كلمة المرور"),
+              ),
+
               SizedBox(height: 30),
 
               //  زر تسجيل الدخول
@@ -118,7 +121,7 @@ class _LoginPageState extends State<LoginPage> {
                   backgroundColor: primary,
                   minimumSize: Size(double.infinity, 50),
                 ),
-                onPressed: sendLoginOTP,
+                onPressed: login,
                 child: Text(
                   "تسجيل الدخول",
                   style: TextStyle(color: Colors.white),
@@ -127,7 +130,7 @@ class _LoginPageState extends State<LoginPage> {
 
               SizedBox(height: 20),
 
-              //  زر إنشاء حساب
+              //  إنشاء حساب
               TextButton(
                 onPressed: () {
                   Navigator.push(
