@@ -1,10 +1,16 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'app_theme.dart';
+import 'app_design.dart';
 import 'edit_donation_page.dart';
 
 class ViewDonationPage extends StatefulWidget {
-  const ViewDonationPage({super.key});
+  final String userEmail;
+
+  const ViewDonationPage({
+    super.key,
+    required this.userEmail,
+  });
 
   @override
   State<ViewDonationPage> createState() => _ViewDonationPageState();
@@ -13,6 +19,7 @@ class ViewDonationPage extends StatefulWidget {
 class _ViewDonationPageState extends State<ViewDonationPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  int _bottomNavIndex = 1;
 
   @override
   void initState() {
@@ -28,14 +35,10 @@ class _ViewDonationPageState extends State<ViewDonationPage>
     switch (status.toLowerCase()) {
       case 'draft':
         return 'مسودة';
-      case 'active':
-        return 'نشط';
-      case 'requested':
-        return 'تم الطلب';
+      case 'confirmed':
+        return 'تم التأكيد';
       case 'completed':
         return 'مكتمل';
-      case 'pending':
-        return 'قيد المراجعة';
       default:
         return status;
     }
@@ -50,24 +53,53 @@ class _ViewDonationPageState extends State<ViewDonationPage>
     return 'غير محدد';
   }
 
+  Color _statusBackground(String status) {
+    switch (status.toLowerCase()) {
+      case 'draft':
+        return AppDesign.warning.withOpacity(0.35);
+      case 'confirmed':
+        return AppDesign.softGreen.withOpacity(0.20);
+      case 'completed':
+        return AppDesign.secondary.withOpacity(0.18);
+      default:
+        return AppDesign.surfaceAlt;
+    }
+  }
+
+  Color _statusTextColor(String status) {
+  switch (status.toLowerCase()) {
+    case 'draft':
+      return AppDesign.primary;
+    case 'confirmed':
+      return AppDesign.success;
+    case 'completed':
+      return AppDesign.primary;
+    default:
+      return AppDesign.textPrimary;
+  }
+}
+
   Widget _chip(IconData icon, String text) {
     return Container(
-      margin: const EdgeInsets.only(left: 8, bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      margin: const EdgeInsets.only(left: AppDesign.spaceSM, bottom: AppDesign.spaceSM),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppDesign.spaceMD,
+        vertical: AppDesign.spaceSM,
+      ),
       decoration: BoxDecoration(
-        color: AppColors.secondaryLight,
-        borderRadius: BorderRadius.circular(14),
+        color: AppDesign.surfaceAlt,
+        borderRadius: BorderRadius.circular(AppDesign.radiusLG),
+        border: Border.all(color: AppDesign.border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: AppColors.primary),
-          const SizedBox(width: 6),
+          Icon(icon, size: AppDesign.iconSM, color: AppDesign.primary),
+          const SizedBox(width: AppDesign.spaceSM),
           Text(
             text,
-            style: const TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 13,
+            style: AppDesign.captionStyle.copyWith(
+              color: AppDesign.textPrimary,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -81,7 +113,9 @@ class _ViewDonationPageState extends State<ViewDonationPage>
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('حذف التبرع'),
-        content: const Text('هل أنت متأكد من حذف هذا التبرع؟'),
+        content: const Text(
+          'هل أنت متأكد من حذف هذا التبرع؟ سيتم حذف جميع الصناديق المرتبطة به أيضًا.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -89,7 +123,7 @@ class _ViewDonationPageState extends State<ViewDonationPage>
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.danger,
+              backgroundColor: AppDesign.error,
             ),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('حذف'),
@@ -98,7 +132,48 @@ class _ViewDonationPageState extends State<ViewDonationPage>
       ),
     );
 
-    if (confirm == true) {
+    if (confirm != true) return;
+
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('يجب تسجيل الدخول أولاً')),
+        );
+        return;
+      }
+
+      final donationDoc = await FirebaseFirestore.instance
+          .collection('donations')
+          .doc(docId)
+          .get();
+
+      if (!donationDoc.exists) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('التبرع غير موجود')),
+        );
+        return;
+      }
+
+      final donationData = donationDoc.data() as Map<String, dynamic>;
+      final donorId = donationData['donorID']?.toString();
+
+      if (donorId != currentUser.uid) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('لا يمكنك حذف تبرع لا يخصك')),
+        );
+        return;
+      }
+
+      final boxesSnapshot = await FirebaseFirestore.instance
+          .collection('donation_boxes')
+          .where('donationId', isEqualTo: docId)
+          .get();
+
+      for (final boxDoc in boxesSnapshot.docs) {
+        await boxDoc.reference.delete();
+      }
+
       await FirebaseFirestore.instance
           .collection('donations')
           .doc(docId)
@@ -108,15 +183,20 @@ class _ViewDonationPageState extends State<ViewDonationPage>
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('تم حذف التبرع بنجاح')),
       );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('فشل حذف التبرع: $e')),
+      );
     }
   }
 
-  Future<void> _moveDraftToActive(String docId) async {
+  Future<void> _moveDraftToConfirmed(String docId) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('تأكيد التبرع'),
-        content: const Text('هل تريد نقل هذا التبرع من مسودة إلى نشط؟'),
+        content: const Text('هل تريد تأكيد هذا التبرع؟'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -135,39 +215,37 @@ class _ViewDonationPageState extends State<ViewDonationPage>
           .collection('donations')
           .doc(docId)
           .update({
-        'status': 'pending',
+        'status': 'confirmed',
       });
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم تحديث حالة التبرع')),
+        const SnackBar(content: Text('تم تأكيد التبرع')),
       );
     }
   }
 
   Future<void> _openEditDonation(DocumentSnapshot doc) async {
-  final data = doc.data() as Map<String, dynamic>;
+    final data = doc.data() as Map<String, dynamic>;
 
-  final result = await Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => EditDonationPage(
-        donationId: doc.id,
-        initialGender: data['gender']?.toString(),
-        initialAgeGroup: data['ageGroup'] is Map<String, dynamic>
-            ? data['ageGroup'] as Map<String, dynamic>
-            : null,
-        initialItemCount: (data['numberOfItems'] ?? 0) as int,
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EditDonationPage(
+          donationId: doc.id,
+          initialGender: data['gender']?.toString(),
+          initialAgeGroupLabel: data['ageGroup']?.toString(),
+          initialItemCount: (data['numberOfItems'] ?? 0) as int,
+        ),
       ),
-    ),
-  );
-
-  if (result == true && mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('تم تحديث التبرع بنجاح')),
     );
+
+    if (result == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم تحديث التبرع بنجاح')),
+      );
+    }
   }
-}
 
   Widget _buildDonationCard(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
@@ -181,19 +259,9 @@ class _ViewDonationPageState extends State<ViewDonationPage>
     final bool isDraft = _isDraftStatus(status);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
+      margin: const EdgeInsets.only(bottom: AppDesign.spaceLG),
+      padding: const EdgeInsets.all(AppDesign.cardPadding),
+      decoration: AppDesign.primaryCardDecoration,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
@@ -203,46 +271,45 @@ class _ViewDonationPageState extends State<ViewDonationPage>
                 child: Text(
                   'تبرع (${gender} - ${ageGroup})',
                   textAlign: TextAlign.right,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
+                  style: AppDesign.subtitleStyle.copyWith(
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: AppDesign.spaceSM),
               Container(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.all(AppDesign.spaceMD),
                 decoration: BoxDecoration(
-                  color: AppColors.secondaryLight,
-                  borderRadius: BorderRadius.circular(14),
+                  color: AppDesign.surfaceAlt,
+                  borderRadius: BorderRadius.circular(AppDesign.radiusMD),
+                  border: Border.all(color: AppDesign.border),
                 ),
                 child: const Icon(
                   Icons.volunteer_activism,
-                  color: AppColors.primary,
+                  color: AppDesign.primary,
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: AppDesign.spaceSM),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppDesign.spaceMD,
+                  vertical: AppDesign.spaceSM,
+                ),
                 decoration: BoxDecoration(
-                  color: isDraft
-                      ? AppColors.secondaryLight
-                      : const Color(0xFFDFF7EA),
-                  borderRadius: BorderRadius.circular(20),
+                  color: _statusBackground(status),
+                  borderRadius: BorderRadius.circular(AppDesign.radiusXL),
                 ),
                 child: Text(
                   _formatStatus(status),
-                  style: TextStyle(
-                    color: isDraft ? AppColors.primary : AppColors.success,
-                    fontWeight: FontWeight.bold,
+                  style: AppDesign.captionStyle.copyWith(
+                    color: _statusTextColor(status),
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: AppDesign.spaceLG),
           Wrap(
             alignment: WrapAlignment.end,
             children: [
@@ -252,34 +319,33 @@ class _ViewDonationPageState extends State<ViewDonationPage>
               _chip(Icons.calendar_today_outlined, _formatDate(createdAt)),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppDesign.spaceSM),
           Row(
             children: isDraft
                 ? [
                     Expanded(
                       child: OutlinedButton.icon(
-                      onPressed: () => _openEditDonation(doc),
-                      icon: const Icon(Icons.edit_outlined),
-                      label: const Text('تعديل'),
+                        onPressed: () => _openEditDonation(doc),
+                        icon: const Icon(Icons.edit_outlined),
+                        label: const Text('تعديل'),
+                      ),
                     ),
-                    ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: AppDesign.spaceSM),
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: () => _deleteDonation(doc.id),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.danger,
-                          side:
-                              const BorderSide(color: AppColors.danger),
+                          foregroundColor: AppDesign.error,
+                          side: const BorderSide(color: AppDesign.error),
                         ),
                         icon: const Icon(Icons.delete_outline),
                         label: const Text('حذف'),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: AppDesign.spaceSM),
                     Expanded(
                       child: ElevatedButton.icon(
-                        onPressed: () => _moveDraftToActive(doc.id),
+                        onPressed: () => _moveDraftToConfirmed(doc.id),
                         icon: const Icon(Icons.check),
                         label: const Text('تأكيد'),
                       ),
@@ -298,18 +364,15 @@ class _ViewDonationPageState extends State<ViewDonationPage>
                           );
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.secondaryLight,
-                          foregroundColor: AppColors.textPrimary,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
+                          backgroundColor: AppDesign.surfaceAlt,
+                          foregroundColor: AppDesign.primary,
+                          elevation: 0,
                         ),
                         child: const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(Icons.visibility_outlined),
-                            SizedBox(width: 8),
+                            SizedBox(width: AppDesign.spaceSM),
                             Text('عرض الحالة'),
                           ],
                         ),
@@ -323,10 +386,24 @@ class _ViewDonationPageState extends State<ViewDonationPage>
   }
 
   Widget _buildDonationsList(bool draftsOnly) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+
+    if (currentUser == null) {
+      return Center(
+        child: Text(
+          'يجب تسجيل الدخول أولاً',
+          style: AppDesign.bodyStyle.copyWith(
+            color: AppDesign.primary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      );
+    }
+
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('donations')
-          .orderBy('createdAt', descending: true)
+          .where('donorID', isEqualTo: currentUser.uid)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -337,7 +414,7 @@ class _ViewDonationPageState extends State<ViewDonationPage>
           return Center(
             child: Text(
               'حدث خطأ في تحميل التبرعات',
-              style: const TextStyle(color: AppColors.primary),
+              style: AppDesign.bodyStyle.copyWith(color: AppDesign.primary),
             ),
           );
         }
@@ -347,35 +424,113 @@ class _ViewDonationPageState extends State<ViewDonationPage>
         final filteredDocs = docs.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
           final status = (data['status'] ?? '').toString();
-          return draftsOnly
-              ? _isDraftStatus(status)
-              : !_isDraftStatus(status);
+          return draftsOnly ? _isDraftStatus(status) : !_isDraftStatus(status);
         }).toList();
 
         if (filteredDocs.isEmpty) {
           return Center(
-            child: Text(
-              draftsOnly
-                  ? 'لا توجد مسودات حالياً'
-                  : 'لا توجد تبرعات نشطة حالياً',
-              style: const TextStyle(
-                color: AppColors.primary,
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
-              ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  draftsOnly
+                      ? Icons.description_outlined
+                      : Icons.volunteer_activism_outlined,
+                  size: AppDesign.iconLG + 20,
+                  color: AppDesign.secondary,
+                ),
+                const SizedBox(height: AppDesign.spaceMD),
+                Text(
+                  draftsOnly
+                      ? 'لا توجد مسودات حالياً'
+                      : 'لا توجد تبرعات حالياً',
+                  style: AppDesign.subtitleStyle.copyWith(
+                    color: AppDesign.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
             ),
           );
         }
 
         return ListView.builder(
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.all(AppDesign.screenPadding),
           itemCount: filteredDocs.length,
           itemBuilder: (_, index) => _buildDonationCard(filteredDocs[index]),
         );
       },
     );
   }
+Widget _buildBottomNavigationBar() {
+  return Container(
+    margin: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+    decoration: BoxDecoration(
+      color: AppDesign.white,
+      borderRadius: BorderRadius.circular(AppDesign.radiusXL),
+      boxShadow: [
+        BoxShadow(
+          color: AppDesign.black.withOpacity(0.06),
+          blurRadius: 18,
+          offset: const Offset(0, 8),
+        ),
+      ],
+    ),
+    child: NavigationBar(
+      height: 78,
+      selectedIndex: _bottomNavIndex,
+      backgroundColor: Colors.transparent,
+      indicatorColor: AppDesign.secondary.withOpacity(0.16),
+      surfaceTintColor: Colors.transparent,
+      labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+      onDestinationSelected: (index) {
+        if (index == _bottomNavIndex && index == 1) return;
 
+        setState(() {
+          _bottomNavIndex = index;
+        });
+
+        if (index == 0) {
+          Navigator.pushReplacementNamed(
+            context,
+            '/donorHome',
+            arguments: widget.userEmail,
+          );
+        } else if (index == 2) {
+          Navigator.pushReplacementNamed(
+            context,
+            '/donorMore',
+            arguments: widget.userEmail,
+          );
+        }
+      },
+      destinations: const [
+        NavigationDestination(
+          icon: Icon(Icons.home_outlined, color: AppDesign.primary),
+          selectedIcon: Icon(Icons.home_rounded, color: AppDesign.primary),
+          label: 'الرئيسية',
+        ),
+        NavigationDestination(
+          icon: Icon(
+            Icons.volunteer_activism_outlined,
+            color: AppDesign.primary,
+          ),
+          selectedIcon: Icon(
+            Icons.volunteer_activism_rounded,
+            color: AppDesign.primary,
+          ),
+          label: 'تبرعاتي',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.more_horiz_rounded, color: AppDesign.primary),
+          selectedIcon:
+              Icon(Icons.more_horiz_rounded, color: AppDesign.primary),
+          label: 'المزيد',
+        ),
+      ],
+    ),
+  );
+}
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -385,9 +540,9 @@ class _ViewDonationPageState extends State<ViewDonationPage>
           decoration: const BoxDecoration(
             gradient: LinearGradient(
               colors: [
-                AppColors.background,
-                AppColors.secondaryLight,
-                AppColors.background,
+                AppDesign.background,
+                AppDesign.surfaceAlt,
+                AppDesign.background,
               ],
               begin: Alignment.topRight,
               end: Alignment.bottomLeft,
@@ -397,60 +552,64 @@ class _ViewDonationPageState extends State<ViewDonationPage>
             child: Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
+                  padding: const EdgeInsets.fromLTRB(
+                    AppDesign.screenPadding,
+                    AppDesign.screenPadding,
+                    AppDesign.screenPadding,
+                    AppDesign.spaceMD,
+                  ),
                   child: Row(
                     children: [
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
-                          children: const [
+                          children: [
                             Text(
                               'تبرعاتي',
                               textAlign: TextAlign.right,
-                              style: TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.textPrimary,
+                              style: AppDesign.h1Style.copyWith(
+                                color: AppDesign.primary,
                               ),
                             ),
-                            SizedBox(height: 4),
+                            const SizedBox(height: AppDesign.spaceXS),
                             Text(
                               'إدارة المسودات والتبرعات النشطة',
                               textAlign: TextAlign.right,
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: AppColors.textSecondary,
-                              ),
+                              style: AppDesign.bodySecondaryStyle,
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: AppDesign.spaceMD),
                       Container(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(AppDesign.spaceMD),
                         decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
+                          color: AppDesign.white,
+                          borderRadius: BorderRadius.circular(AppDesign.radiusMD),
+                          border: Border.all(color: AppDesign.border),
                         ),
                         child: const Icon(
                           Icons.favorite_border,
-                          color: AppColors.primary,
+                          color: AppDesign.primary,
                         ),
                       ),
                     ],
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppDesign.screenPadding,
+                  ),
                   child: Container(
                     height: 58,
-                    padding: const EdgeInsets.all(4),
+                    padding: const EdgeInsets.all(AppDesign.spaceXS),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
+                      color: AppDesign.white,
+                      borderRadius: BorderRadius.circular(AppDesign.radiusLG),
+                      border: Border.all(color: AppDesign.border),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: AppDesign.black.withOpacity(0.04),
                           blurRadius: 12,
                           offset: const Offset(0, 5),
                         ),
@@ -460,16 +619,16 @@ class _ViewDonationPageState extends State<ViewDonationPage>
                       controller: _tabController,
                       indicatorSize: TabBarIndicatorSize.tab,
                       indicator: BoxDecoration(
-                        color: AppColors.primary,
-                        borderRadius: BorderRadius.circular(16),
+                        color: AppDesign.primary,
+                        borderRadius: BorderRadius.circular(AppDesign.radiusMD),
                       ),
-                      labelColor: Colors.white,
-                      unselectedLabelColor: AppColors.primary,
+                      labelColor: AppDesign.white,
+                      unselectedLabelColor: AppDesign.primary,
                       dividerColor: Colors.transparent,
-                      splashBorderRadius: BorderRadius.circular(16),
-                      labelStyle: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
+                      splashBorderRadius:
+                          BorderRadius.circular(AppDesign.radiusMD),
+                      labelStyle: AppDesign.bodyStyle.copyWith(
+                        fontWeight: FontWeight.w700,
                       ),
                       tabs: const [
                         Tab(text: 'التبرعات النشطة'),
@@ -478,7 +637,7 @@ class _ViewDonationPageState extends State<ViewDonationPage>
                     ),
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: AppDesign.spaceSM),
                 Expanded(
                   child: TabBarView(
                     controller: _tabController,
@@ -492,6 +651,7 @@ class _ViewDonationPageState extends State<ViewDonationPage>
             ),
           ),
         ),
+        bottomNavigationBar: _buildBottomNavigationBar(),
       ),
     );
   }
