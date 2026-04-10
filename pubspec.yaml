@@ -1,29 +1,38 @@
-name: my_app
-description: "A new Flutter project."
+name: madad_app    
+description: A new Flutter project
 publish_to: 'none'
 
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.11.4
+  sdk: ^3.11.0
 
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.8
-  firebase_core: ^3.15.2
-  firebase_auth: ^5.7.0
-  cloud_firestore: ^5.6.12
 
+  cupertino_icons: ^1.0.8
+  image_picker: ^1.0.7
+  google_mlkit_image_labeling: ^0.10.0
+  path_provider: ^2.1.2
+  http: ^1.2.0
+  google_generative_ai: ^0.4.5
+  flutter_gemini: ^2.0.4  # تأكد من استخدام آخر إصدار
+  firebase_core: ^2.30.0
+  cloud_firestore: ^4.17.5
+  flutter_riverpod: ^2.5.1
+  cloud_functions: ^4.0.0
+  firebase_auth: ^4.17.0
+  
 dev_dependencies:
-  flutter_test:
-    sdk: flutter
-  flutter_lints: ^3.0.0
+  flutter_lints: ^6.0.0
 
 flutter:
   uses-material-design: true
 
-  # الصور
+
+
+   # الصور
   assets:
     - assets/images/
 
