@@ -765,7 +765,7 @@ Widget build(BuildContext context) {
                         'gender': selectedGender ?? "",
                         'ageGroup': selectedAgeGroup?['label'] ?? "",
                         'numberOfItems': totalItems,
-                        'status': 'pending',
+                        'status': 'draft',
                       });
 
                       Navigator.pushNamedAndRemoveUntil(
