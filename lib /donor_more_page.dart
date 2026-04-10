@@ -37,7 +37,6 @@ class _DonorMorePageState extends State<DonorMorePage> {
       final currentUser = FirebaseAuth.instance.currentUser;
 
       if (currentUser == null) {
-        if (!mounted) return;
         setState(() {
           email = widget.userEmail;
           isLoading = false;
@@ -49,8 +48,6 @@ class _DonorMorePageState extends State<DonorMorePage> {
           .collection('Users')
           .doc(currentUser.uid)
           .get();
-
-      if (!mounted) return;
 
       if (userDoc.exists) {
         final data = userDoc.data() ?? {};
@@ -70,22 +67,65 @@ class _DonorMorePageState extends State<DonorMorePage> {
 
           isLoading = false;
         });
-      } else {
-        setState(() {
-          email = currentUser.email ?? widget.userEmail;
-          maskedPassword = '-';
-          isLoading = false;
-        });
       }
     } catch (e) {
-      debugPrint('Error loading user data: $e');
-
-      if (!mounted) return;
+      debugPrint('Error: $e');
       setState(() {
         email = widget.userEmail;
         isLoading = false;
       });
     }
+  }
+
+  // 🔴 Popup تسجيل الخروج
+  Future<void> _showLogoutDialog() async {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: const Text(
+          'تسجيل الخروج',
+          textAlign: TextAlign.center,
+        ),
+        content: const Text(
+          'هل أنت متأكد من تسجيل الخروج؟',
+          textAlign: TextAlign.center,
+        ),
+        actionsAlignment: MainAxisAlignment.spaceEvenly,
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+            },
+            child: const Text(
+              'إلغاء',
+              style: TextStyle(color: Colors.grey),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+
+              await FirebaseAuth.instance.signOut();
+
+              if (!mounted) return;
+
+              Navigator.pushNamedAndRemoveUntil(
+                context,
+                '/',
+                (route) => false,
+              );
+            },
+            child: const Text(
+              'تسجيل الخروج',
+              style: TextStyle(color: Colors.black),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -102,6 +142,7 @@ class _DonorMorePageState extends State<DonorMorePage> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       _buildTopIdentityHeader(),
+
                       Padding(
                         padding: const EdgeInsets.only(top: 16, bottom: 10),
                         child: Text(
@@ -114,6 +155,7 @@ class _DonorMorePageState extends State<DonorMorePage> {
                           ),
                         ),
                       ),
+
                       Padding(
                         padding:
                             AppPadding.screen.copyWith(top: 10, bottom: 12),
@@ -129,13 +171,14 @@ class _DonorMorePageState extends State<DonorMorePage> {
                             _buildInfoField('البريد الإلكتروني', email),
                             AppGap.md,
                             _buildInfoField('كلمة المرور', maskedPassword),
+
                             AppGap.xl,
+
+                            // زر تعديل
                             SizedBox(
                               height: AppDesign.buttonHeightMD,
                               child: ElevatedButton(
-                                onPressed: () {
-                                  // لاحقاً: الانتقال لصفحة تعديل البيانات
-                                },
+                                onPressed: () {},
                                 child: Text(
                                   'تعديل',
                                   style:
@@ -144,6 +187,33 @@ class _DonorMorePageState extends State<DonorMorePage> {
                                     fontWeight: FontWeight.w800,
                                   ),
                                 ),
+                              ),
+                            ),
+
+                            AppGap.lg,
+
+                            // 🔴 تسجيل الخروج (بدون زر)
+                            GestureDetector(
+                              onTap: _showLogoutDialog,
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(
+                                    Icons.logout_rounded,
+                                    color: Colors.red,
+                                    size: 22,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'تسجيل الخروج',
+                                    style:
+                                        AppDesign.subtitleStyle.copyWith(
+                                      color: Colors.red,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 18,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
@@ -177,7 +247,6 @@ class _DonorMorePageState extends State<DonorMorePage> {
           label,
           style: AppDesign.bodyStyle.copyWith(
             color: AppDesign.textSecondary,
-            fontWeight: FontWeight.w600,
           ),
         ),
         AppGap.sm,
@@ -188,10 +257,7 @@ class _DonorMorePageState extends State<DonorMorePage> {
           decoration: BoxDecoration(
             color: AppDesign.surface,
             borderRadius: BorderRadius.circular(AppDesign.radiusLG),
-            border: Border.all(
-              color: AppDesign.border,
-              width: 1,
-            ),
+            border: Border.all(color: AppDesign.border),
           ),
           child: Text(
             value.isEmpty ? '-' : value,
@@ -206,72 +272,37 @@ class _DonorMorePageState extends State<DonorMorePage> {
   }
 
   Widget _buildBottomNavigationBar() {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-      decoration: BoxDecoration(
-        color: AppDesign.white,
-        borderRadius: BorderRadius.circular(AppDesign.radiusXL),
-        boxShadow: [
-          BoxShadow(
-            color: AppDesign.black.withOpacity(0.06),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: NavigationBar(
-        height: 78,
-        selectedIndex: _bottomNavIndex,
-        backgroundColor: Colors.transparent,
-        indicatorColor: AppDesign.secondary.withOpacity(0.16),
-        surfaceTintColor: Colors.transparent,
-        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        onDestinationSelected: (index) {
-          if (index == _bottomNavIndex && index == 2) return;
-
-          setState(() {
-            _bottomNavIndex = index;
-          });
-
-          if (index == 0) {
-            Navigator.pushReplacementNamed(
-              context,
-              '/donorHome',
-              arguments: widget.userEmail,
-            );
-          } else if (index == 1) {
-            Navigator.pushReplacementNamed(
-              context,
-              '/viewDonation',
-              arguments: widget.userEmail,
-            );
-          }
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined, color: AppDesign.primary),
-            selectedIcon: Icon(Icons.home_rounded, color: AppDesign.primary),
-            label: 'الرئيسية',
-          ),
-          NavigationDestination(
-            icon: Icon(
-              Icons.volunteer_activism_outlined,
-              color: AppDesign.primary,
-            ),
-            selectedIcon: Icon(
-              Icons.volunteer_activism_rounded,
-              color: AppDesign.primary,
-            ),
-            label: 'تبرعاتي',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.more_horiz_rounded, color: AppDesign.primary),
-            selectedIcon:
-                Icon(Icons.more_horiz_rounded, color: AppDesign.primary),
-            label: 'المزيد',
-          ),
-        ],
-      ),
+    return NavigationBar(
+      selectedIndex: _bottomNavIndex,
+      onDestinationSelected: (index) {
+        if (index == 0) {
+          Navigator.pushReplacementNamed(
+            context,
+            '/donorHome',
+            arguments: widget.userEmail,
+          );
+        } else if (index == 1) {
+          Navigator.pushReplacementNamed(
+            context,
+            '/viewDonation',
+            arguments: widget.userEmail,
+          );
+        }
+      },
+      destinations: const [
+        NavigationDestination(
+          icon: Icon(Icons.home_outlined),
+          label: 'الرئيسية',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.volunteer_activism_outlined),
+          label: 'تبرعاتي',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.more_horiz),
+          label: 'المزيد',
+        ),
+      ],
     );
   }
 }
