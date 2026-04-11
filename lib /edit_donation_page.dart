@@ -37,7 +37,7 @@ class _EditDonationPageState extends State<EditDonationPage> {
 
   final TextEditingController _itemCountController = TextEditingController();
 
-  final String _apiKey = 'AIzaSyAW2Lf2LnCgUyrMoBQ6fK9qwmrveCUf6CE';
+  final String _apiKey = '';
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
 
   int totalItems = 0;
@@ -416,46 +416,44 @@ class _EditDonationPageState extends State<EditDonationPage> {
   Widget _buildTopInfoCard() {
     return Container(
       width: double.infinity,
-      padding: AppPadding.card,
-      decoration: AppDesign.primaryCardDecoration,
-      child: Row(
-        children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: AppDesign.surfaceAlt,
-              shape: BoxShape.circle,
-              border: Border.all(color: AppDesign.border),
+      padding: const EdgeInsets.all(AppDesign.spaceLG),
+      decoration: BoxDecoration(
+        color: AppDesign.background,
+        borderRadius: BorderRadius.circular(AppDesign.radiusXL),
+        border: Border.all(
+          color: AppDesign.border,
+          width: 1,
+        ),
+      ),
+      child: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Row(
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: AppDesign.surfaceAlt,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.edit_note_rounded,
+                color: AppDesign.primary,
+                size: 26,
+              ),
             ),
-            child: const Icon(
-              Icons.edit_note_rounded,
-              color: AppDesign.primary,
-              size: AppDesign.iconMD,
-            ),
-          ),
-          AppGap.wMD,
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  'تعديل التبرع',
-                  textAlign: TextAlign.right,
-                  style: AppDesign.h2Style.copyWith(
-                    color: AppDesign.primary,
-                  ),
+            const SizedBox(width: AppDesign.spaceMD),
+            Expanded(
+              child: Text(
+                'يمكنك تعديل بيانات التبرع والصناديق ثم حفظ التغييرات.',
+                textAlign: TextAlign.right,
+                style: AppDesign.bodySecondaryStyle.copyWith(
+                  height: 1.5,
                 ),
-                AppGap.xs,
-                Text(
-                  'يمكنك تعديل بيانات التبرع والصناديق ثم حفظ التغييرات.',
-                  textAlign: TextAlign.right,
-                  style: AppDesign.bodySecondaryStyle,
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -567,8 +565,10 @@ class _EditDonationPageState extends State<EditDonationPage> {
                 Expanded(
                   child: DropdownButtonFormField<String>(
                     value: item['type'] as String?,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: "نوع القطعة",
+                      filled: true,
+                      fillColor: AppDesign.surface,
                     ),
                     items: const [
                       "قميص",
@@ -608,6 +608,42 @@ class _EditDonationPageState extends State<EditDonationPage> {
     );
   }
 
+  InputDecoration _sharedInputDecoration({
+    required String label,
+    required IconData icon,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(
+        icon,
+        color: AppDesign.primary,
+      ),
+      filled: true,
+      fillColor: AppDesign.surface,
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppDesign.radiusLG),
+        borderSide: const BorderSide(
+          color: AppDesign.border,
+          width: 1,
+        ),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppDesign.radiusLG),
+        borderSide: const BorderSide(
+          color: AppDesign.primary,
+          width: 1.2,
+        ),
+      ),
+      disabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppDesign.radiusLG),
+        borderSide: const BorderSide(
+          color: AppDesign.border,
+          width: 1,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -637,15 +673,9 @@ class _EditDonationPageState extends State<EditDonationPage> {
 
                     DropdownButtonFormField<String>(
                       value: selectedGender,
-                      decoration: InputDecoration(
-                        labelText: "الجنس",
-                        prefixIcon: const Icon(
-                          Icons.person_outline,
-                          color: AppDesign.primary,
-                        ),
-                        fillColor: openedBox == null
-                            ? AppDesign.surface
-                            : AppDesign.surfaceAlt,
+                      decoration: _sharedInputDecoration(
+                        label: "الجنس",
+                        icon: Icons.person_outline,
                       ),
                       items: ["ذكر", "أنثى"]
                           .map(
@@ -663,15 +693,9 @@ class _EditDonationPageState extends State<EditDonationPage> {
 
                     DropdownButtonFormField<Map<String, dynamic>>(
                       value: selectedAgeGroup,
-                      decoration: InputDecoration(
-                        labelText: "الفئة العمرية",
-                        prefixIcon: const Icon(
-                          Icons.cake_outlined,
-                          color: AppDesign.primary,
-                        ),
-                        fillColor: openedBox == null
-                            ? AppDesign.surface
-                            : AppDesign.surfaceAlt,
+                      decoration: _sharedInputDecoration(
+                        label: "الفئة العمرية",
+                        icon: Icons.cake_outlined,
                       ),
                       items: ageGroups.map((age) {
                         return DropdownMenuItem<Map<String, dynamic>>(
@@ -690,15 +714,9 @@ class _EditDonationPageState extends State<EditDonationPage> {
                       keyboardType: TextInputType.number,
                       onChanged: inputsLocked ? null : _updateItemCount,
                       enabled: !inputsLocked,
-                      decoration: InputDecoration(
-                        labelText: "إجمالي عدد القطع",
-                        prefixIcon: const Icon(
-                          Icons.format_list_numbered_rounded,
-                          color: AppDesign.primary,
-                        ),
-                        fillColor: openedBox == null
-                            ? AppDesign.surface
-                            : AppDesign.surfaceAlt,
+                      decoration: _sharedInputDecoration(
+                        label: "إجمالي عدد القطع",
+                        icon: Icons.format_list_numbered_rounded,
                       ),
                     ),
                     AppGap.section,
