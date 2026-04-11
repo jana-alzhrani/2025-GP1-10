@@ -114,7 +114,7 @@ class _DonorMorePageState extends State<DonorMorePage> {
 
               Navigator.pushNamedAndRemoveUntil(
                 context,
-                '/',
+                '/welcome',
                 (route) => false,
               );
             },
