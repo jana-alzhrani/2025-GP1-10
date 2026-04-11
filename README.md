@@ -15,5 +15,5 @@ Frontend: Flutter (Dart) Material Design Firebase SDK
 
 Backend & Database: Firebase Firestore Firebase Authentication
 
-Other Tools: GitHub Git Bash Google Colab jiraw 
+Other Tools: GitHub Git Bash jira 
 
