@@ -76,15 +76,29 @@ class _LoginPageState extends State<LoginPage> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            Container(
-              height: 220,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                image: DecorationImage(
-                  image: AssetImage('assets/images/madad_identity.png'),
-                  fit: BoxFit.cover,
+            Stack(
+              children: [
+                Container(
+                  height: 220,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    image: DecorationImage(
+                      image: AssetImage('assets/images/madad_icon.jpeg'),
+                      fit: BoxFit.cover,
+                    ),
+                  ),
                 ),
-              ),
+                Positioned(
+                  top: 40,
+                  left: 10,
+                  child: IconButton(
+                    icon: Icon(Icons.arrow_back, color: Colors.white),
+                    onPressed: () {
+                      Navigator.pushReplacementNamed(context, '/');
+                    },
+                  ),
+                ),
+              ],
             ),
 
             SafeArea(
@@ -178,7 +192,6 @@ class _LoginPageState extends State<LoginPage> {
             ),
           ),
           SizedBox(height: 6),
-
           TextField(
             controller: controller,
             obscureText: isPassword,
