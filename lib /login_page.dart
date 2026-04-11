@@ -4,6 +4,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'dart:math';
 import 'signup_page.dart';
 import 'otp_page.dart';
+import 'app_design.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -19,7 +20,6 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> login() async {
     String emailText = email.text.trim().toLowerCase();
 
-    // تحقق من الحقول
     if (emailText.isEmpty || password.text.isEmpty) {
       ScaffoldMessenger.of(
         context,
@@ -27,7 +27,6 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    //  تحقق من الإيميل
     if (!emailText.contains('@')) {
       ScaffoldMessenger.of(
         context,
@@ -36,23 +35,19 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     try {
-      //  تحقق من الباسورد
       await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: emailText,
         password: password.text,
       );
 
-      //  توليد OTP
       String otp = (100000 + Random().nextInt(900000)).toString();
 
-      //  إرسال OTP
       final callable = FirebaseFunctions.instance.httpsCallable(
         'sendSignupOtp',
       );
 
       await callable.call({"email": emailText, "otp": otp});
 
-      // الانتقال لصفحة OTP
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -76,73 +71,133 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    Color primary = Color(0xFF2F6F73);
-
     return Scaffold(
+      backgroundColor: AppDesign.background,
       body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(25),
-          child: Column(
-            children: [
-              SizedBox(height: 100),
-
-              Icon(Icons.login, size: 70, color: primary),
-
-              SizedBox(height: 20),
-
-              Text(
-                "تسجيل الدخول",
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              ),
-
-              SizedBox(height: 30),
-
-              // 📧 الإيميل
-              TextField(
-                controller: email,
-                keyboardType: TextInputType.emailAddress,
-                decoration: InputDecoration(labelText: "البريد الإلكتروني"),
-              ),
-
-              SizedBox(height: 20),
-
-              //  كلمة المرور
-              TextField(
-                controller: password,
-                obscureText: true,
-                decoration: InputDecoration(labelText: "كلمة المرور"),
-              ),
-
-              SizedBox(height: 30),
-
-              //  زر تسجيل الدخول
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: primary,
-                  minimumSize: Size(double.infinity, 50),
-                ),
-                onPressed: login,
-                child: Text(
-                  "تسجيل الدخول",
-                  style: TextStyle(color: Colors.white),
+        child: Column(
+          children: [
+            Container(
+              height: 220,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                image: DecorationImage(
+                  image: AssetImage('assets/images/madad_identity.png'),
+                  fit: BoxFit.cover,
                 ),
               ),
+            ),
 
-              SizedBox(height: 20),
+            SafeArea(
+              child: Padding(
+                padding: AppPadding.screen,
+                child: Column(
+                  children: [
+                    AppGap.md,
 
-              //  إنشاء حساب
-              TextButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => SignUpPage()),
-                  );
-                },
-                child: Text("ما عندك حساب؟ إنشاء حساب"),
+                    Text(
+                      "تسجيل الدخول",
+                      style: AppDesign.h2Style.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+
+                    AppGap.lg,
+
+                    buildField("البريد الإلكتروني", email, Icons.email),
+                    buildField(
+                      "كلمة المرور",
+                      password,
+                      Icons.lock,
+                      isPassword: true,
+                    ),
+
+                    AppGap.xl,
+
+                    Padding(
+                      padding: AppPadding.horizontal,
+                      child: ElevatedButton(
+                        onPressed: login,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppDesign.primary,
+                          minimumSize: Size(double.infinity, 56),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(60),
+                          ),
+                        ),
+                        child: Text(
+                          "تسجيل الدخول",
+                          style: AppDesign.buttonOnPrimaryStyle.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    AppGap.md,
+
+                    TextButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => SignUpPage()),
+                        );
+                      },
+                      child: Text(
+                        "ما عندك حساب؟ إنشاء حساب",
+                        style: AppDesign.bodySecondaryStyle,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
+      ),
+    );
+  }
+
+  Widget buildField(
+    String label,
+    TextEditingController controller,
+    IconData icon, {
+    bool isPassword = false,
+  }) {
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppDesign.spaceLG,
+        vertical: AppDesign.spaceSM,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(
+            label,
+            style: AppDesign.bodySecondaryStyle.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          SizedBox(height: 6),
+
+          TextField(
+            controller: controller,
+            obscureText: isPassword,
+            style: TextStyle(
+              fontFamily: AppDesign.fontFamily,
+              fontWeight: FontWeight.w500,
+            ),
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: AppDesign.white,
+              prefixIcon: Icon(icon, color: AppDesign.textSecondary),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(30),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: EdgeInsets.symmetric(vertical: 16),
+            ),
+          ),
+        ],
       ),
     );
   }
