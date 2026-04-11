@@ -4,6 +4,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'dart:math';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'donor_home_page.dart';
+import 'app_design.dart';
 
 class OtpPage extends StatefulWidget {
   String correctCode;
@@ -78,12 +79,26 @@ class _OtpPageState extends State<OtpPage> {
 
   Future<void> verifyCode() async {
     try {
+      //  تحقق إذا الحقل فاضي
+      if (codeController.text.trim().isEmpty) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("رجاءً أدخل رمز التحقق")));
+        return;
+      }
+
       if (codeController.text.trim() == widget.correctCode) {
+        //  تسجيل دخول
         if (widget.isLogin) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text("تم تسجيل الدخول بنجاح 🎉")));
-        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("أهلاً وسهلاً بك 👋"),
+              backgroundColor: AppDesign.primary,
+            ),
+          );
+        }
+        //  إنشاء حساب
+        else {
           final userCredential = await FirebaseAuth.instance
               .createUserWithEmailAndPassword(
                 email: widget.email,
@@ -104,12 +119,14 @@ class _OtpPageState extends State<OtpPage> {
             'createdAt': FieldValue.serverTimestamp(),
           });
 
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text("تم إنشاء الحساب بنجاح 🎉")));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("أهلاً وسهلاً بك 👋"),
+              backgroundColor: AppDesign.primary,
+            ),
+          );
         }
 
-        //  الانتقال للهوم
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(
@@ -125,8 +142,6 @@ class _OtpPageState extends State<OtpPage> {
         codeController.clear();
       }
     } catch (e) {
-      print("ERROR: $e");
-
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(" خطأ ❌")));
@@ -135,46 +150,59 @@ class _OtpPageState extends State<OtpPage> {
 
   @override
   Widget build(BuildContext context) {
-    Color primary = Color(0xFF2F6F73);
-
     return Scaffold(
+      backgroundColor: AppDesign.background,
       body: Padding(
-        padding: const EdgeInsets.all(25),
+        padding: AppPadding.screen,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.lock, size: 70, color: primary),
+            Icon(Icons.lock, size: 70, color: AppDesign.primary),
 
-            SizedBox(height: 20),
+            AppGap.md,
 
             Text(
               "أدخل رمز التحقق",
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              style: AppDesign.h2Style.copyWith(fontWeight: FontWeight.w600),
             ),
 
-            SizedBox(height: 20),
+            AppGap.md,
 
             TextField(
               controller: codeController,
               keyboardType: TextInputType.number,
+              style: TextStyle(fontFamily: AppDesign.fontFamily),
               decoration: InputDecoration(
-                labelText: "رمز التحقق",
-                border: OutlineInputBorder(),
+                filled: true,
+                fillColor: AppDesign.white,
+                prefixIcon: Icon(Icons.lock, color: AppDesign.textSecondary),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(30),
+                  borderSide: BorderSide.none,
+                ),
               ),
             ),
 
-            SizedBox(height: 25),
+            AppGap.lg,
 
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: primary,
-                minimumSize: Size(double.infinity, 50),
+                backgroundColor: AppDesign.primary,
+                minimumSize: Size(double.infinity, 56),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(60),
+                ),
               ),
               onPressed: verifyCode,
-              child: Text("تأكيد", style: TextStyle(color: Colors.white)),
+              child: Text(
+                "تأكيد",
+                style: AppDesign.buttonOnPrimaryStyle.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
 
-            SizedBox(height: 15),
+            AppGap.md,
 
             TextButton(
               onPressed: canResend ? resendCode : null,
@@ -182,6 +210,7 @@ class _OtpPageState extends State<OtpPage> {
                 canResend
                     ? "إعادة إرسال الكود"
                     : "إعادة الإرسال خلال $seconds ثانية",
+                style: AppDesign.bodySecondaryStyle,
               ),
             ),
           ],
