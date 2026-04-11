@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:madad_app/firebase_options.dart';
+import 'package:gb_project/firebase_options.dart';// غيروه خلوه اسم البروجكت حقكم
 
 import 'welcome_page.dart';
 import 'login_page.dart';
 import 'signup_page.dart';
 import 'donor_home_page.dart';
-import 'edit_donation_page.dart';
 import 'view_donation_page.dart';
 import 'add_donation_page.dart';
 import 'donor_more_page.dart';
@@ -28,46 +25,44 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
-    // Check if user is logged in
-    User? user = FirebaseAuth.instance.currentUser;
+    final user = FirebaseAuth.instance.currentUser;
+    final userEmail = user?.email ?? '';
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      theme: AppDesign.lightTheme,
 
-
-  theme: AppDesign.lightTheme,
-
-
-      // Decide first page based on login state
-      initialRoute: user == null ? '/' : '/donorHome',
+      home: user == null
+          ? const WelcomePage()
+          : DonorHomePage(userEmail: userEmail),
 
       routes: {
+        '/login': (context) => LoginPage(),
+        '/signup': (context) => SignUpPage(),
 
-        // Authentication
-        '/': (context) => const WelcomePage(),
-        '/login': (context) =>  LoginPage(),
-        '/signup': (context) =>  SignUpPage(),
-
-        // Donor pages
         '/donorHome': (context) {
-    final email = ModalRoute.of(context)!.settings.arguments as String;
+          final email =
+              (ModalRoute.of(context)?.settings.arguments as String?) ??
+                  userEmail;
+          return DonorHomePage(userEmail: email);
+        },
 
-    return DonorHomePage(userEmail: email);
-  },
+        '/viewDonation': (context) {
+          final email =
+              (ModalRoute.of(context)?.settings.arguments as String?) ??
+                  userEmail;
+          return ViewDonationPage(userEmail: email);
+        },
+
+        '/donorMore': (context) {
+          final email =
+              (ModalRoute.of(context)?.settings.arguments as String?) ??
+                  userEmail;
+          return DonorMorePage(userEmail: email);
+        },
+
         '/addDonation': (context) => const AddDonationPage(),
-        '/viewDonation': (context) => const ViewDonationPage(),
-       // '/editDonation': (context) => const EditDonationPage(),
-
-
-'/donorMore': (context) {
-  final email =
-      ModalRoute.of(context)!.settings.arguments as String;
-
-  return DonorMorePage(
-    userEmail: email,
-  );
-},      },
+      },
     );
   }
 }
