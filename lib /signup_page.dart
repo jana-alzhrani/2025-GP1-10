@@ -3,6 +3,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math';
 import 'otp_page.dart';
+import 'app_design.dart';
 
 class SignUpPage extends StatefulWidget {
   @override
@@ -17,7 +18,7 @@ class _SignUpPageState extends State<SignUpPage> {
   final password = TextEditingController();
   final confirmPassword = TextEditingController();
 
-  // إرسال OTP
+  
   Future<void> sendEmailOTP(String emailText) async {
     try {
       String otp = (100000 + Random().nextInt(900000)).toString();
@@ -49,11 +50,11 @@ class _SignUpPageState extends State<SignUpPage> {
     }
   }
 
+  // 🔥 نفس التحقق بالكامل (ما لمسته)
   Future<void> signup() async {
     String phoneText = phone.text.trim();
     String emailText = email.text.trim();
 
-    //  تحقق الحقول
     if (firstName.text.isEmpty ||
         lastName.text.isEmpty ||
         emailText.isEmpty ||
@@ -73,7 +74,6 @@ class _SignUpPageState extends State<SignUpPage> {
       return;
     }
 
-    //  تحقق الإيميل
     if (!emailText.contains('@')) {
       ScaffoldMessenger.of(
         context,
@@ -81,7 +81,6 @@ class _SignUpPageState extends State<SignUpPage> {
       return;
     }
 
-    //  تحقق رقم الجوال
     if (phoneText.length != 10 || !phoneText.startsWith('05')) {
       ScaffoldMessenger.of(
         context,
@@ -89,7 +88,6 @@ class _SignUpPageState extends State<SignUpPage> {
       return;
     }
 
-    //تحقق الباسورد
     if (password.text != confirmPassword.text) {
       ScaffoldMessenger.of(
         context,
@@ -97,7 +95,6 @@ class _SignUpPageState extends State<SignUpPage> {
       return;
     }
 
-    // تحقق تكرار الإيميل
     var existingEmail = await FirebaseFirestore.instance
         .collection('Users')
         .where('email', isEqualTo: emailText)
@@ -110,7 +107,6 @@ class _SignUpPageState extends State<SignUpPage> {
       return;
     }
 
-    //  تحقق تكرار الجوال
     var existingUser = await FirebaseFirestore.instance
         .collection('Users')
         .where('phone', isEqualTo: phoneText)
@@ -128,87 +124,130 @@ class _SignUpPageState extends State<SignUpPage> {
 
   @override
   Widget build(BuildContext context) {
-    Color primary = Color(0xFF2F6F73);
-
     return Scaffold(
+      backgroundColor: AppDesign.background,
       body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(25),
-          child: Column(
-            children: [
-              SizedBox(height: 80),
-
-              Icon(Icons.person_add, size: 70, color: primary),
-
-              SizedBox(height: 15),
-
-              Text(
-                "إنشاء حساب جديد",
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              ),
-
-              SizedBox(height: 30),
-
-              TextField(
-                controller: firstName,
-                decoration: InputDecoration(labelText: "الاسم الأول"),
-              ),
-
-              SizedBox(height: 20),
-
-              TextField(
-                controller: lastName,
-                decoration: InputDecoration(labelText: "اسم العائلة"),
-              ),
-
-              SizedBox(height: 20),
-
-              TextField(
-                controller: email,
-                keyboardType: TextInputType.emailAddress,
-                decoration: InputDecoration(labelText: "البريد الإلكتروني"),
-              ),
-
-              SizedBox(height: 20),
-
-              TextField(
-                controller: phone,
-                keyboardType: TextInputType.phone,
-                decoration: InputDecoration(labelText: "رقم الجوال"),
-              ),
-
-              SizedBox(height: 20),
-
-              TextField(
-                controller: password,
-                obscureText: true,
-                decoration: InputDecoration(labelText: "كلمة المرور"),
-              ),
-
-              SizedBox(height: 20),
-
-              TextField(
-                controller: confirmPassword,
-                obscureText: true,
-                decoration: InputDecoration(labelText: "تأكيد كلمة المرور"),
-              ),
-
-              SizedBox(height: 30),
-
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: primary,
-                  minimumSize: Size(double.infinity, 50),
-                ),
-                onPressed: signup,
-                child: Text(
-                  "إنشاء الحساب",
-                  style: TextStyle(color: Colors.white),
+        child: Column(
+          children: [
+            //  الهيدر
+            Container(
+              height: 220,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                image: DecorationImage(
+                  image: AssetImage('assets/images/madad_identity.png'),
+                  fit: BoxFit.cover,
                 ),
               ),
-            ],
-          ),
+            ),
+
+            SafeArea(
+              child: Padding(
+                padding: AppPadding.screen,
+                child: Column(
+                  children: [
+                    AppGap.md,
+
+                    Text(
+                      "البيانات الشخصية",
+                      style: AppDesign.h2Style.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+
+                    AppGap.lg,
+
+                    buildField("الاسم الأول", firstName, Icons.person),
+                    buildField("الاسم الأخير", lastName, Icons.person),
+                    buildField("رقم الجوال", phone, Icons.phone),
+                    buildField("البريد الإلكتروني", email, Icons.email),
+                    buildField(
+                      "كلمة المرور",
+                      password,
+                      Icons.lock,
+                      isPassword: true,
+                    ),
+                    buildField(
+                      "تأكيد كلمة المرور",
+                      confirmPassword,
+                      Icons.lock,
+                      isPassword: true,
+                    ),
+
+                    AppGap.xl,
+
+                    Padding(
+                      padding: AppPadding.horizontal,
+                      child: ElevatedButton(
+                        onPressed: signup,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppDesign.primary,
+                          minimumSize: Size(double.infinity, 56),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(60),
+                          ),
+                        ),
+                        child: Text(
+                          "إنشاء الحساب",
+                          style: AppDesign.buttonOnPrimaryStyle.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    AppGap.xl,
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
+      ),
+    );
+  }
+
+  Widget buildField(
+    String label,
+    TextEditingController controller,
+    IconData icon, {
+    bool isPassword = false,
+  }) {
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppDesign.spaceLG,
+        vertical: AppDesign.spaceSM,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(
+            label,
+            style: AppDesign.bodySecondaryStyle.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          SizedBox(height: 6),
+
+          TextField(
+            controller: controller,
+            obscureText: isPassword,
+            style: TextStyle(
+              fontFamily: AppDesign.fontFamily,
+              fontWeight: FontWeight.w500,
+            ),
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: AppDesign.white,
+              prefixIcon: Icon(icon, color: AppDesign.textSecondary),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(30),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: EdgeInsets.symmetric(vertical: 16),
+            ),
+          ),
+        ],
       ),
     );
   }
