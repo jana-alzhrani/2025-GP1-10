@@ -10,7 +10,7 @@ donors with eligible beneficiaries.
 we used flutter framework and dart as the programming language 
 # 2.Repository Structure
 GP-Madad/ │ ├── Release-1/ # First full release (application prototype) │ ├── Release-2/ # Final release with ML models ├── Madad_Application/ # Final application │ ├── README.md # Project documentation ├── AUTHORS.md # Contributors ├── .gitignore └── .gitattributes
-4. Technologies Used
+# 3. Technologies Used
 Frontend: Flutter (Dart) Material Design Firebase SDK
 
 Backend & Database: Firebase Firestore Firebase Authentication
