@@ -7,7 +7,7 @@ through a structured and clearly defined process.
 The objective of Madad is to facilitate the organized and fair distribution of donated clothing 
 within the community in Saudi Arabia through a supervised mobile platform that connects 
 donors with eligible beneficiaries. 
-we used flutter framework and dart as the programming language 
+
 # 2.Repository Structure
 GP-Madad/ │ ├── Release-1/ # First full release (application prototype) │ ├── Release-2/ # Final release with ML models ├── Madad_Application/ # Final application │ ├── README.md # Project documentation ├── AUTHORS.md # Contributors ├── .gitignore └── .gitattributes
 # 3. Technologies Used
