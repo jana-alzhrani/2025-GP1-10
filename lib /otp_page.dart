@@ -79,7 +79,6 @@ class _OtpPageState extends State<OtpPage> {
 
   Future<void> verifyCode() async {
     try {
-      //  تحقق إذا الحقل فاضي
       if (codeController.text.trim().isEmpty) {
         ScaffoldMessenger.of(
           context,
@@ -88,7 +87,6 @@ class _OtpPageState extends State<OtpPage> {
       }
 
       if (codeController.text.trim() == widget.correctCode) {
-        //  تسجيل دخول
         if (widget.isLogin) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -96,9 +94,7 @@ class _OtpPageState extends State<OtpPage> {
               backgroundColor: AppDesign.primary,
             ),
           );
-        }
-        //  إنشاء حساب
-        else {
+        } else {
           final userCredential = await FirebaseAuth.instance
               .createUserWithEmailAndPassword(
                 email: widget.email,
@@ -152,65 +148,87 @@ class _OtpPageState extends State<OtpPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppDesign.background,
-      body: Padding(
-        padding: AppPadding.screen,
+      body: SingleChildScrollView(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.lock, size: 70, color: AppDesign.primary),
-
-            AppGap.md,
-
-            Text(
-              "أدخل رمز التحقق",
-              style: AppDesign.h2Style.copyWith(fontWeight: FontWeight.w600),
-            ),
-
-            AppGap.md,
-
-            TextField(
-              controller: codeController,
-              keyboardType: TextInputType.number,
-              style: TextStyle(fontFamily: AppDesign.fontFamily),
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: AppDesign.white,
-                prefixIcon: Icon(Icons.lock, color: AppDesign.textSecondary),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(30),
-                  borderSide: BorderSide.none,
+            Container(
+              height: 220,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                image: DecorationImage(
+                  image: AssetImage('assets/images/madad_icon.jpeg'),
+                  fit: BoxFit.cover,
                 ),
               ),
             ),
 
-            AppGap.lg,
+            Padding(
+              padding: AppPadding.screen,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.lock, size: 70, color: AppDesign.primary),
 
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppDesign.primary,
-                minimumSize: Size(double.infinity, 56),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(60),
-                ),
-              ),
-              onPressed: verifyCode,
-              child: Text(
-                "تأكيد",
-                style: AppDesign.buttonOnPrimaryStyle.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
+                  AppGap.md,
 
-            AppGap.md,
+                  Text(
+                    "أدخل رمز التحقق",
+                    style: AppDesign.h2Style.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
 
-            TextButton(
-              onPressed: canResend ? resendCode : null,
-              child: Text(
-                canResend
-                    ? "إعادة إرسال الكود"
-                    : "إعادة الإرسال خلال $seconds ثانية",
-                style: AppDesign.bodySecondaryStyle,
+                  AppGap.md,
+
+                  TextField(
+                    controller: codeController,
+                    keyboardType: TextInputType.number,
+                    style: TextStyle(fontFamily: AppDesign.fontFamily),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: AppDesign.white,
+                      prefixIcon: Icon(
+                        Icons.lock,
+                        color: AppDesign.textSecondary,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(30),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+
+                  AppGap.lg,
+
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppDesign.primary,
+                      minimumSize: Size(double.infinity, 56),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(60),
+                      ),
+                    ),
+                    onPressed: verifyCode,
+                    child: Text(
+                      "تأكيد",
+                      style: AppDesign.buttonOnPrimaryStyle.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+
+                  AppGap.md,
+
+                  TextButton(
+                    onPressed: canResend ? resendCode : null,
+                    child: Text(
+                      canResend
+                          ? "إعادة إرسال الكود"
+                          : "إعادة الإرسال خلال $seconds ثانية",
+                      style: AppDesign.bodySecondaryStyle,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
