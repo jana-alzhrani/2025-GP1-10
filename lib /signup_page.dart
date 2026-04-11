@@ -50,7 +50,7 @@ class _SignUpPageState extends State<SignUpPage> {
     }
   }
 
-  // 🔥 نفس التحقق بالكامل (ما لمسته)
+  
   Future<void> signup() async {
     String phoneText = phone.text.trim();
     String emailText = email.text.trim();
