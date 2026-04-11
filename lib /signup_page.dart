@@ -18,7 +18,6 @@ class _SignUpPageState extends State<SignUpPage> {
   final password = TextEditingController();
   final confirmPassword = TextEditingController();
 
-  
   Future<void> sendEmailOTP(String emailText) async {
     try {
       String otp = (100000 + Random().nextInt(900000)).toString();
@@ -50,7 +49,6 @@ class _SignUpPageState extends State<SignUpPage> {
     }
   }
 
-  
   Future<void> signup() async {
     String phoneText = phone.text.trim();
     String emailText = email.text.trim();
@@ -129,16 +127,29 @@ class _SignUpPageState extends State<SignUpPage> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            //  الهيدر
-            Container(
-              height: 220,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                image: DecorationImage(
-                  image: AssetImage('assets/images/madad_identity.png'),
-                  fit: BoxFit.cover,
+            Stack(
+              children: [
+                Container(
+                  height: 220,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    image: DecorationImage(
+                      image: AssetImage('assets/images/madad_icon.jpeg'),
+                      fit: BoxFit.cover,
+                    ),
+                  ),
                 ),
-              ),
+                Positioned(
+                  top: 40,
+                  left: 10,
+                  child: IconButton(
+                    icon: Icon(Icons.arrow_back, color: Colors.white),
+                    onPressed: () {
+                      Navigator.pushReplacementNamed(context, '/');
+                    },
+                  ),
+                ),
+              ],
             ),
 
             SafeArea(
@@ -228,7 +239,6 @@ class _SignUpPageState extends State<SignUpPage> {
             ),
           ),
           SizedBox(height: 6),
-
           TextField(
             controller: controller,
             obscureText: isPassword,
