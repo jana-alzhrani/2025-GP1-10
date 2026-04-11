@@ -36,7 +36,7 @@ class _ViewDonationPageState extends State<ViewDonationPage>
       case 'draft':
         return 'مسودة';
       case 'confirmed':
-        return 'تم التأكيد';
+        return 'مؤكد';
       case 'completed':
         return 'مكتمل';
       default:
@@ -67,24 +67,23 @@ class _ViewDonationPageState extends State<ViewDonationPage>
   }
 
   Color _statusTextColor(String status) {
-  switch (status.toLowerCase()) {
-    case 'draft':
-      return AppDesign.primary;
-    case 'confirmed':
-      return AppDesign.success;
-    case 'completed':
-      return AppDesign.primary;
-    default:
-      return AppDesign.textPrimary;
+    switch (status.toLowerCase()) {
+      case 'draft':
+        return AppDesign.primary;
+      case 'confirmed':
+        return AppDesign.success;
+      case 'completed':
+        return AppDesign.primary;
+      default:
+        return AppDesign.textPrimary;
+    }
   }
-}
 
   Widget _chip(IconData icon, String text) {
     return Container(
-      margin: const EdgeInsets.only(left: AppDesign.spaceSM, bottom: AppDesign.spaceSM),
       padding: const EdgeInsets.symmetric(
-        horizontal: AppDesign.spaceMD,
-        vertical: AppDesign.spaceSM,
+      horizontal: AppDesign.spaceMD,
+      vertical: AppDesign.spaceSM,
       ),
       decoration: BoxDecoration(
         color: AppDesign.surfaceAlt,
@@ -266,59 +265,81 @@ class _ViewDonationPageState extends State<ViewDonationPage>
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'تبرع (${gender} - ${ageGroup})',
-                  textAlign: TextAlign.right,
-                  style: AppDesign.subtitleStyle.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              const SizedBox(width: AppDesign.spaceSM),
-              Container(
-                padding: const EdgeInsets.all(AppDesign.spaceMD),
-                decoration: BoxDecoration(
-                  color: AppDesign.surfaceAlt,
-                  borderRadius: BorderRadius.circular(AppDesign.radiusMD),
-                  border: Border.all(color: AppDesign.border),
-                ),
-                child: const Icon(
-                  Icons.volunteer_activism,
-                  color: AppDesign.primary,
-                ),
-              ),
-              const SizedBox(width: AppDesign.spaceSM),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppDesign.spaceMD,
-                  vertical: AppDesign.spaceSM,
-                ),
-                decoration: BoxDecoration(
-                  color: _statusBackground(status),
-                  borderRadius: BorderRadius.circular(AppDesign.radiusXL),
-                ),
-                child: Text(
-                  _formatStatus(status),
-                  style: AppDesign.captionStyle.copyWith(
-                    color: _statusTextColor(status),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
+  children: [
+
+    // النص (يمين)
+    Expanded(
+      child: Text(
+        'تبرع (${gender} - ${ageGroup})',
+        textAlign: TextAlign.right,
+        style: AppDesign.subtitleStyle.copyWith(
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    ),
+
+    const SizedBox(width: AppDesign.spaceSM),
+
+    // الحالة (تجي قبل الأيقونة)
+          Container(
+        constraints: const BoxConstraints(minHeight: 44),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 10,
+        ),
+        decoration: BoxDecoration(
+          color: _statusBackground(status),
+          borderRadius: BorderRadius.circular(22),
+        ),
+        child: Center(
+          child: Text(
+            _formatStatus(status),
+            style: AppDesign.captionStyle.copyWith(
+              color: _statusTextColor(status),
+              fontWeight: FontWeight.w700,
+            ),
+            textAlign: TextAlign.center,
           ),
+        ),
+      ),
+    const SizedBox(width: AppDesign.spaceSM),
+
+    // الأيقونة (آخر شي يسار)
+        Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: AppDesign.surfaceAlt,
+        borderRadius: BorderRadius.circular(AppDesign.radiusMD),
+        border: Border.all(color: AppDesign.border),
+      ),
+      child: const Icon(
+        Icons.volunteer_activism,
+        color: AppDesign.primary,
+        size: 22,
+      ),
+    ),
+      ],
+    ),
           const SizedBox(height: AppDesign.spaceLG),
-          Wrap(
-            alignment: WrapAlignment.end,
-            children: [
-              _chip(Icons.wc_outlined, gender),
-              _chip(Icons.cake_outlined, ageGroup),
-              _chip(Icons.inventory_2_outlined, '$numberOfItems قطع'),
-              _chip(Icons.calendar_today_outlined, _formatDate(createdAt)),
-            ],
+            Align(
+          alignment: Alignment.centerRight,
+          child: Directionality(
+            textDirection: TextDirection.rtl,
+            child: Wrap(
+              alignment: WrapAlignment.start,
+              runAlignment: WrapAlignment.start,
+              spacing: AppDesign.spaceSM,
+              runSpacing: AppDesign.spaceSM,
+              children: [
+                _chip(Icons.wc_outlined, gender),
+                _chip(Icons.cake_outlined, ageGroup),
+                _chip(Icons.inventory_2_outlined, '$numberOfItems قطع'),
+                _chip(Icons.calendar_today_outlined, _formatDate(createdAt)),
+              ],
+            ),
           ),
+        ),
           const SizedBox(height: AppDesign.spaceSM),
           Row(
             children: isDraft
@@ -351,34 +372,8 @@ class _ViewDonationPageState extends State<ViewDonationPage>
                       ),
                     ),
                   ]
-                : [
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'الحالة الحالية: ${_formatStatus(status)}',
-                              ),
-                            ),
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppDesign.surfaceAlt,
-                          foregroundColor: AppDesign.primary,
-                          elevation: 0,
-                        ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.visibility_outlined),
-                            SizedBox(width: AppDesign.spaceSM),
-                            Text('عرض الحالة'),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
+                : [],
+         
           ),
         ],
       ),
@@ -558,40 +553,21 @@ Widget _buildBottomNavigationBar() {
                     AppDesign.screenPadding,
                     AppDesign.spaceMD,
                   ),
-                  child: Row(
+                  child: 
+                 Column(
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              'تبرعاتي',
-                              textAlign: TextAlign.right,
-                              style: AppDesign.h1Style.copyWith(
-                                color: AppDesign.primary,
-                              ),
-                            ),
-                            const SizedBox(height: AppDesign.spaceXS),
-                            Text(
-                              'إدارة المسودات والتبرعات النشطة',
-                              textAlign: TextAlign.right,
-                              style: AppDesign.bodySecondaryStyle,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: AppDesign.spaceMD),
-                      Container(
-                        padding: const EdgeInsets.all(AppDesign.spaceMD),
-                        decoration: BoxDecoration(
-                          color: AppDesign.white,
-                          borderRadius: BorderRadius.circular(AppDesign.radiusMD),
-                          border: Border.all(color: AppDesign.border),
-                        ),
-                        child: const Icon(
-                          Icons.favorite_border,
+                      Text(
+                        'تبرعاتي',
+                        textAlign: TextAlign.center,
+                        style: AppDesign.h1Style.copyWith(
                           color: AppDesign.primary,
                         ),
+                      ),
+                      const SizedBox(height: AppDesign.spaceXS),
+                      Text(
+                        'إدارة المسودات والتبرعات النشطة',
+                        textAlign: TextAlign.center,
+                        style: AppDesign.bodySecondaryStyle,
                       ),
                     ],
                   ),
