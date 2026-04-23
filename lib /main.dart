@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:madad_app/firebase_options.dart'; //خلوه زي اسم البروجكت 
-
+import 'auth_gate.dart';
 import 'welcome_page.dart';
 import 'login_page.dart';
 import 'signup_page.dart';
@@ -10,10 +10,12 @@ import 'donor_home_page.dart';
 import 'view_donation_page.dart';
 import 'add_donation_page.dart';
 import 'donor_more_page.dart';
+import 'Beneficiary_home_page.dart';
 import 'app_design.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
@@ -34,7 +36,7 @@ class MyApp extends StatelessWidget {
 
       home: user == null
           ? const WelcomePage()
-          : DonorHomePage(userEmail: userEmail),
+          : AuthGate(),
 
       routes: {
         '/login': (context) => LoginPage(),
@@ -47,6 +49,14 @@ class MyApp extends StatelessWidget {
                   userEmail;
           return DonorHomePage(userEmail: email);
         },
+
+
+        '/beneficiaryHome': (context) {
+  final email =
+      (ModalRoute.of(context)?.settings.arguments as String?) ??
+          userEmail;
+  return BeneficiaryHomePage(userEmail: email);
+},
 
         '/viewDonation': (context) {
           final email =
