@@ -36,7 +36,7 @@ String? donationId;
 
   final TextEditingController _itemCountController = TextEditingController();
 
-  final String _apiKey = 'api_key_here'; 
+  final String _apiKey = ''; 
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
 
 
@@ -72,6 +72,28 @@ final List<Map<String, dynamic>> ageGroups = [
 
 ];
 
+String? generalSize;
+
+bool ageNeedsSize() {
+  if (selectedAgeGroup == null) return false;
+  return selectedAgeGroup!['min'] >= 13;
+}
+
+  bool needsSize(String? type) {
+    return ["قميص", "بنطلون", "فستان", "معطف"].contains(type);
+  }
+
+  bool isShoe(String? type) => type == "حذاء";
+
+Map<String, String> typeMap = {
+  "shirt": "قميص",
+  "pants": "بنطلون",
+  "dress": "فستان",
+  "coat": "معطف",
+  "shoe": "حذاء",
+  "bag": "حقيبة",
+  "hat": "قبعة",
+};
 
   void _updateItemCount(String value) {
 
@@ -120,6 +142,8 @@ final List<Map<String, dynamic>> ageGroups = [
           'image': null,
 
           'type': null,
+
+          'size': null,
 
           'isValid': false,
 
@@ -202,9 +226,24 @@ final List<Map<String, dynamic>> ageGroups = [
 
                 {
 
-                  "text":
+            "text": """
+Check the image.
 
-"Check if this is a valid photo of a clothing item or a bag. Answer 'Yes' or 'No' only. Accept clothes or bags of any color, including black. Reject only if it is completely black, blurry, or not clothes/bags."
+If it is a valid clothing item or bag, answer in this format:
+Yes - [Type]
+
+Types must be one of:
+Shirt, Pants, Dress, Coat, Shoe, Bag, Hat
+
+If invalid, answer:
+No
+
+Reject if:
+- completely black
+- blurry
+- not clothing or bag
+"""
+
                 },
 
                 {"inline_data": {"mime_type": "image/jpeg", "data": base64Image}}
@@ -229,42 +268,46 @@ final List<Map<String, dynamic>> ageGroups = [
 
 
 
-        setState(() {
-  if (result.trim().toLowerCase().contains("yes")) {
+      setState(() {
+  String cleaned = result.trim().toLowerCase();
+
+  if (cleaned.startsWith("yes")) {
+
+    String? detectedType;
+
+    // استخراج النوع
+    if (cleaned.contains("-")) {
+      String typeEng = cleaned.split("-")[1].trim();
+      detectedType = typeMap[typeEng];
+    }
+
     boxes[box]![index]['isValid'] = true;
     boxes[box]![index]['error'] = null;
 
-    // رسالة SnackBar باللون الأخضر
+    // تعيين النوع تلقائي
+    if (detectedType != null && boxes[box]![index]['type'] == null) {
+      boxes[box]![index]['type'] = detectedType;
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text(
-          "الصورة صالحة ✅",
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        backgroundColor: Colors.green, // خلفية خضراء
-        duration: Duration(seconds: 2),
+        content: Text("تم التعرف على القطعة تلقائيًا ✅"),
+        backgroundColor: Colors.green,
       ),
     );
+
   } else {
+
     boxes[box]![index]['image'] = null;
     boxes[box]![index]['type'] = null;
     boxes[box]![index]['isValid'] = false;
+    boxes[box]![index]['size'] = null;
     boxes[box]![index]['error'] = null;
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text(
-          "الصورة غير صالحة!",
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        content: Text("الصورة غير صالحة!"),
         backgroundColor: Colors.red,
-        duration: Duration(seconds: 2),
       ),
     );
   }
@@ -278,6 +321,9 @@ final List<Map<String, dynamic>> ageGroups = [
         });
 
       }
+      
+      
+
 
     } catch (e) {
 
@@ -316,18 +362,21 @@ Future<void> createDonationIfNeeded() async {
   Future<void> _submitBox(int box) async {
   final items = boxes[box]!;
 
-  // التحقق من اكتمال جميع الحقول
   bool incomplete = items.any(
-      (item) => item['image'] == null || item['type'] == null || !item['isValid']);
+  (item) =>
+      item['image'] == null ||
+      item['type'] == null ||
+      !item['isValid'] ||
+      (item['type'] == "حذاء" && item['size'] == null)
+);
 
-  if (selectedGender == null || selectedAgeGroup == null || incomplete) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("يرجى إكمال جميع الحقول ")),
-    );
-    return;
-  }
+if (ageNeedsSize() && generalSize == null) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text("يرجى اختيار مقاس الملابس")),
+  );
+  return;
+}
 
-  // عرض نافذة التأكيد
   bool confirm = await showDialog(
     context: context,
     builder: (context) => AlertDialog(
@@ -364,23 +413,29 @@ if (user == null) {
     await createDonationIfNeeded();
 
     await firestore.collection('donation_boxes').add({
-        'donationId': donationId, 
-        'userId': user.uid, 
-      'boxNumber': box,
-      'gender': selectedGender,
-      'ageGroup': {
-        'label': selectedAgeGroup!['label'],
-        'min': selectedAgeGroup!['min'],
-        'max': selectedAgeGroup!['max'],
-      },
-      'items': items.map((e) {
-        return {
-          'type': e['type'],
-          'imageBase64': base64Encode(e['image']),
-        };
-      }).toList(),
-      'timestamp': FieldValue.serverTimestamp(),
-    });
+  'donationId': donationId,
+  'userId': user.uid,
+  'boxNumber': box,
+  'gender': selectedGender,
+  'ageGroup': {
+    'label': selectedAgeGroup!['label'],
+    'min': selectedAgeGroup!['min'],
+    'max': selectedAgeGroup!['max'],
+  },
+
+  //  المقاس العام للملابس
+  'generalSize': generalSize,
+
+  'items': items.map((e) {
+    return {
+      'type': e['type'],
+      'size': e['type'] == "حذاء" ? e['size'] : null,
+      'imageBase64': base64Encode(e['image']),
+    };
+  }).toList(),
+
+  'timestamp': FieldValue.serverTimestamp(),
+});
 
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text("تم حفظ الصندوق $box ✅")));
@@ -388,7 +443,7 @@ if (user == null) {
     setState(() {
       boxes[box] = List.generate(
         boxes[box]!.length,
-        (index) => {'image': null, 'type': null, 'isValid': false, 'error': null},
+        (index) => {'image': null, 'type': null,  'size': null, 'isValid': false, 'error': null},
       );
       savedBoxes.add(box);
       openedBox = null;
@@ -453,7 +508,6 @@ void _showExitDialog() {
 }
 
  @override
-@override
 Widget build(BuildContext context) {
   return Directionality(
     textDirection: TextDirection.rtl,
@@ -493,6 +547,7 @@ Widget build(BuildContext context) {
 
             /// العمر
             DropdownButtonFormField<Map<String, dynamic>>(
+              
               decoration: const InputDecoration(
                 labelText: "الفئة العمرية",
                 prefixIcon: Icon(Icons.cake),
@@ -508,15 +563,30 @@ Widget build(BuildContext context) {
                   : (v) => setState(() => selectedAgeGroup = v),
               value: selectedAgeGroup,
             ),
-
+if (ageNeedsSize()) ...[
+  AppGap.md,
+  DropdownButtonFormField<String>(
+    decoration: const InputDecoration(
+      labelText: "المقاس",
+      prefixIcon: Icon(Icons.straighten),
+    ),
+    value: generalSize,
+    items: ["XXXS","XXS","XS","S","M","L","XL","XXL","XXXL"]
+        .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+        .toList(),
+    onChanged: inputsLocked
+        ? null
+        : (v) => setState(() => generalSize = v),
+  ),
+],
             AppGap.md,
 
             /// عدد القطع
             TextField(
               controller: _itemCountController,
               keyboardType: TextInputType.number,
-              onChanged: inputsLocked ? null : _updateItemCount,
               enabled: !inputsLocked,
+              onChanged: inputsLocked ? null : _updateItemCount,
               decoration: const InputDecoration(
                 labelText: "إجمالي عدد القطع",
               ),
@@ -557,8 +627,7 @@ Widget build(BuildContext context) {
                               selectedAgeGroup == null) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text(
-                                    "يجب اختيار الجنس والفئة العمرية أولاً"),
+                                content: Text("يجب اختيار الجنس والفئة العمرية أولاً"),
                               ),
                             );
                             return;
@@ -569,13 +638,6 @@ Widget build(BuildContext context) {
                               openedBox = boxNum;
                               inputsLocked = true;
                             });
-                          } else {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content:
-                                    Text("هذا الصندوق تم حفظه مسبقاً"),
-                              ),
-                            );
                           }
                         },
 
@@ -585,10 +647,7 @@ Widget build(BuildContext context) {
                                 BorderRadius.circular(AppDesign.radiusLG),
                             gradient: LinearGradient(
                               colors: isSaved
-                                  ? [
-                                      AppDesign.success,
-                                      AppDesign.primary
-                                    ]
+                                  ? [AppDesign.success, AppDesign.primary]
                                   : [
                                       AppDesign.softGreen.withOpacity(0.2),
                                       AppDesign.softGreen
@@ -678,20 +737,15 @@ Widget build(BuildContext context) {
                                     width: 90,
                                     decoration: BoxDecoration(
                                       color: AppDesign.surfaceAlt,
-                                      borderRadius:
-                                          BorderRadius.circular(12),
-                                      border: Border.all(
-                                          color: AppDesign.border),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: AppDesign.border),
                                     ),
                                     child: item['image'] == null
                                         ? const Icon(Icons.upload)
                                         : ClipRRect(
                                             borderRadius:
                                                 BorderRadius.circular(12),
-                                            child: Image.memory(
-                                              item['image'],
-                                              fit: BoxFit.cover,
-                                            ),
+                                            child: Image.memory(item['image']),
                                           ),
                                   ),
                                 ),
@@ -699,27 +753,55 @@ Widget build(BuildContext context) {
                                 AppGap.wMD,
 
                                 Expanded(
-                                  child: DropdownButton<String>(
-                                    hint: const Text("نوع القطعة"),
-                                    value: item['type'],
-                                    isExpanded: true,
-                                    items: [
-                                      "قميص",
-                                      "بنطلون",
-                                      "فستان",
-                                      "معطف",
-                                      "حذاء",
-                                      "حقيبة",
-                                      "قبعة"
-                                    ]
-                                        .map((e) => DropdownMenuItem(
-                                              value: e,
-                                              child: Text(e),
-                                            ))
-                                        .toList(),
-                                    onChanged: (v) => setState(() {
-                                      boxes[openedBox]![idx]['type'] = v;
-                                    }),
+                                  child: Column(
+                                    children: [
+
+                                      /// نوع القطعة
+                                      DropdownButton<String>(
+                                        hint: const Text("نوع القطعة"),
+                                        value: item['type'],
+                                        isExpanded: true,
+                                        items: [
+                                          "قميص",
+                                          "بنطلون",
+                                          "فستان",
+                                          "معطف",
+                                          "حذاء",
+                                          "حقيبة",
+                                          "قبعة"
+                                        ]
+                                            .map((e) => DropdownMenuItem(
+                                                value: e, child: Text(e)))
+                                            .toList(),
+                                        onChanged: (v) {
+                                          setState(() {
+                                            boxes[openedBox]![idx]['type'] = v;
+                                            boxes[openedBox]![idx]['size'] = null;
+                                          });
+                                        },
+                                      ),
+
+                                  
+                                      ///  مقاس الحذاء
+                                      if (item['type'] == "حذاء")
+                                        DropdownButton<String>(
+                                          hint: const Text("مقاس الحذاء"),
+                                          value: item['size'],
+                                          isExpanded: true,
+                                          items: List.generate(
+                                            28,
+                                            (i) => (20 + i).toString(),
+                                          )
+                                              .map((e) => DropdownMenuItem(
+                                                  value: e, child: Text(e)))
+                                              .toList(),
+                                          onChanged: (v) {
+                                            setState(() {
+                                              boxes[openedBox]![idx]['size'] = v;
+                                            });
+                                          },
+                                        ),
+                                    ],
                                   ),
                                 ),
                               ],
@@ -750,34 +832,43 @@ Widget build(BuildContext context) {
 
             AppGap.lg,
 
-            /// زر إنهاء
-            ElevatedButton(
-              onPressed: (totalBoxes > 0 && allBoxesSaved())
-                  ? () async {
-                      final user =
-                          FirebaseAuth.instance.currentUser;
+           
+ElevatedButton(
+  onPressed: (totalBoxes > 0 && allBoxesSaved())
+      ? () async {
+          final user = FirebaseAuth.instance.currentUser;
 
-                      await FirebaseFirestore.instance
-                          .collection('donations')
-                          .doc(donationId ?? user!.uid)
-                          .set({
-                        'donorID': user!.uid,
-                        'gender': selectedGender ?? "",
-                        'ageGroup': selectedAgeGroup?['label'] ?? "",
-                        'numberOfItems': totalItems,
-                        'status': 'draft',
-                      });
+          await FirebaseFirestore.instance
+              .collection('donations')
+              .doc(donationId ?? user!.uid)
+              .set({
+            'donorID': user!.uid,
+            'gender': selectedGender ?? "",
+            'ageGroup': selectedAgeGroup?['label'] ?? "",
+            'numberOfItems': totalItems,
+            'status': 'draft',
+          });
 
-                      Navigator.pushNamedAndRemoveUntil(
-              context,
-              '/donorHome',
-              (route) => false,
-              arguments: user?.email ?? '',
-            );
-                    }
-                  : null,
-              child: const Text("تم"),
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("تم حفظ التبرع بالكامل ✅"),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
             ),
+          );
+
+          await Future.delayed(const Duration(seconds: 1));
+
+          Navigator.pushNamedAndRemoveUntil(
+            context,
+            '/donorHome',
+            (route) => false,
+            arguments: user?.email ?? '',
+          );
+        }
+      : null,
+  child: const Text("تم"),
+),
           ],
         ),
       ),
