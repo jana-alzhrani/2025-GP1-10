@@ -188,7 +188,16 @@ Map<String, String> typeMap = {
   }
   
 
+bool canOpenBox() {
+    if (selectedGender == null) return false;
+    if (selectedAgeGroup == null) return false;
 
+    if (ageNeedsSize() && generalSize == null) {
+      return false;
+    }
+
+    return true;
+  }
 
   Future<void> _verifyImageWithGemini(int box, int index, Uint8List imageBytes) async {
 
@@ -291,7 +300,7 @@ Reject if:
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text("تم التعرف على القطعة تلقائيًا ✅"),
+        content: Text("الصورة صالحة"),
         backgroundColor: Colors.green,
       ),
     );
@@ -359,7 +368,28 @@ Future<void> createDonationIfNeeded() async {
   print("NEW donationId => $donationId");
 }
 
+bool validateBoxBeforeSave(int box) {
+  final items = boxes[box]!;
+
+  for (var item in items) {
+    if (item['image'] == null) return false;
+    if (item['type'] == null) return false;
+    if (item['isValid'] != true) return false;
+
+    if (item['type'] == "حذاء" && item['size'] == null) {
+      return false;
+    }
+  }
+
+  return true;
+}
   Future<void> _submitBox(int box) async {
+    if (!validateBoxBeforeSave(box)) {
+  ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('يرجى إكمال جميع الحقول')),
+      );
+  return;
+}
   final items = boxes[box]!;
 
   bool incomplete = items.any(
@@ -370,13 +400,7 @@ Future<void> createDonationIfNeeded() async {
       (item['type'] == "حذاء" && item['size'] == null)
 );
 
-if (ageNeedsSize() && generalSize == null) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text("يرجى اختيار مقاس الملابس")),
-  );
-  return;
-}
-
+  // عرض نافذة التأكيد
   bool confirm = await showDialog(
     context: context,
     builder: (context) => AlertDialog(
@@ -485,7 +509,6 @@ void _showExitDialog() {
 
             final user = FirebaseAuth.instance.currentUser;
 
-            // 🔥 احذف التبرع إذا كان تم إنشاؤه
             if (donationId != null) {
               await FirebaseFirestore.instance
                   .collection('donations')
@@ -622,24 +645,21 @@ if (ageNeedsSize()) ...[
                       bool isSaved = savedBoxes.contains(boxNum);
 
                       return GestureDetector(
-                        onTap: () {
-                          if (selectedGender == null ||
-                              selectedAgeGroup == null) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text("يجب اختيار الجنس والفئة العمرية أولاً"),
-                              ),
-                            );
-                            return;
-                          }
+                       onTap: () {
+  if (!canOpenBox()) {
+     ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('يرجى إكمال جميع الحقول ')),
+      );
+    return;
+  }
 
-                          if (!isSaved) {
-                            setState(() {
-                              openedBox = boxNum;
-                              inputsLocked = true;
-                            });
-                          }
-                        },
+  if (!isSaved) {
+    setState(() {
+      openedBox = boxNum;
+      inputsLocked = true;
+    });
+  }
+},
 
                         child: Container(
                           decoration: BoxDecoration(
@@ -851,8 +871,8 @@ ElevatedButton(
 
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text("تم حفظ التبرع بالكامل ✅"),
-              backgroundColor: Colors.green,
+              content: Text("تم حفظ التبرع بالكامل بنجاح"),
+              backgroundColor: AppDesign.success,
               duration: Duration(seconds: 2),
             ),
           );
