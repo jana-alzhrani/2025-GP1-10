@@ -1,9 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:math';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'otp_page.dart';
-import 'app_design.dart';
 
 class SignUpPage extends StatefulWidget {
   @override
@@ -13,120 +12,109 @@ class SignUpPage extends StatefulWidget {
 class _SignUpPageState extends State<SignUpPage> {
   final firstName = TextEditingController();
   final lastName = TextEditingController();
-  final email = TextEditingController();
   final phone = TextEditingController();
-  final password = TextEditingController();
-  final confirmPassword = TextEditingController();
 
-  Future<void> sendEmailOTP(String emailText) async {
-    try {
-      String otp = (100000 + Random().nextInt(900000)).toString();
+  String? firstNameError;
+  String? lastNameError;
+  String? phoneError;
 
-      final callable = FirebaseFunctions.instance.httpsCallable(
-        'sendSignupOtp',
-      );
+  Timer? _debouncePhone;
 
-      await callable.call({"email": emailText, "otp": otp});
-
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => OtpPage(
-            correctCode: otp,
-            firstName: firstName.text,
-            lastName: lastName.text,
-            email: emailText,
-            phone: phone.text.trim(),
-            isLogin: false,
-            password: password.text,
+  Future<void> sendPhoneOTP(String phoneNumber) async {
+    await FirebaseAuth.instance.verifyPhoneNumber(
+      phoneNumber: phoneNumber.startsWith('0')
+          ? "+966${phoneNumber.substring(1)}"
+          : "+966$phoneNumber",
+      verificationCompleted: (_) {},
+      verificationFailed: (e) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("فشل إرسال الكود")));
+      },
+      codeSent: (verificationId, _) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => OtpPage(
+              correctCode: verificationId,
+              firstName: firstName.text,
+              lastName: lastName.text,
+              email: '',
+              phone: phone.text,
+              isLogin: false,
+            ),
           ),
-        ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("فشل إرسال الكود ❌")));
-    }
+        );
+      },
+      codeAutoRetrievalTimeout: (_) {},
+    );
   }
 
   Future<void> signup() async {
-    String phoneText = phone.text.trim();
-    String emailText = email.text.trim();
+    setState(() {
+      firstNameError = null;
+      lastNameError = null;
+      phoneError = null;
+    });
 
-    if (firstName.text.isEmpty ||
-        lastName.text.isEmpty ||
-        emailText.isEmpty ||
-        phoneText.isEmpty ||
-        password.text.isEmpty ||
-        confirmPassword.text.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("الرجاء تعبئة جميع الحقول")));
+    bool hasError = false;
+
+    // الاسم الأول
+    if (firstName.text.isEmpty) {
+      firstNameError = "الرجاء تعبئة الحقل";
+      hasError = true;
+    } else if (firstName.text.length < 2 || firstName.text.length > 50) {
+      firstNameError = "يجب أن يكون بين 2 و 50 حرف";
+      hasError = true;
+    }
+
+    // الاسم الأخير
+    if (lastName.text.isEmpty) {
+      lastNameError = "الرجاء تعبئة الحقل";
+      hasError = true;
+    } else if (lastName.text.length < 2 || lastName.text.length > 50) {
+      lastNameError = "يجب أن يكون بين 2 و 50 حرف";
+      hasError = true;
+    }
+
+    // رقم الجوال
+    if (phone.text.isEmpty) {
+      phoneError = "الرجاء تعبئة الحقل";
+      hasError = true;
+    } else if (phone.text.length != 10 || !phone.text.startsWith('05')) {
+      phoneError = "رقم الجوال غير صحيح";
+      hasError = true;
+    }
+
+    // التحقق من التكرار
+    if (!hasError) {
+      var phoneCheck = await FirebaseFirestore.instance
+          .collection('Users')
+          .where('phone', isEqualTo: phone.text.trim())
+          .get();
+
+      if (phoneCheck.docs.isNotEmpty) {
+        phoneError = "رقم الجوال مستخدم مسبقاً";
+        hasError = true;
+      }
+    }
+
+    if (hasError) {
+      setState(() {});
       return;
     }
 
-    if (password.text.length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("كلمة المرور لازم تكون 6 خانات على الأقل")),
-      );
-      return;
-    }
-
-    if (!emailText.contains('@')) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("الإيميل غير صحيح")));
-      return;
-    }
-
-    if (phoneText.length != 10 || !phoneText.startsWith('05')) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("رقم الجوال غير صحيح")));
-      return;
-    }
-
-    if (password.text != confirmPassword.text) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("كلمتا المرور غير متطابقة")));
-      return;
-    }
-
-    var existingEmail = await FirebaseFirestore.instance
-        .collection('Users')
-        .where('email', isEqualTo: emailText)
-        .get();
-
-    if (existingEmail.docs.isNotEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("الإيميل مسجل مسبقاً")));
-      return;
-    }
-
-    var existingUser = await FirebaseFirestore.instance
-        .collection('Users')
-        .where('phone', isEqualTo: phoneText)
-        .get();
-
-    if (existingUser.docs.isNotEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("رقم الجوال مسجل مسبقاً")));
-      return;
-    }
-
-    await sendEmailOTP(emailText);
+    await sendPhoneOTP(phone.text.trim());
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppDesign.background,
+      backgroundColor: Color(0xFFF3F4F6),
       body: SingleChildScrollView(
         child: Column(
           children: [
+            // الهيدر
             Stack(
               children: [
                 Container(
@@ -145,71 +133,40 @@ class _SignUpPageState extends State<SignUpPage> {
                   child: IconButton(
                     icon: Icon(Icons.arrow_back, color: Colors.white),
                     onPressed: () {
-                      Navigator.pushReplacementNamed(context, '/');
+                      Navigator.pop(context);
                     },
                   ),
                 ),
               ],
             ),
 
-            SafeArea(
-              child: Padding(
-                padding: AppPadding.screen,
-                child: Column(
-                  children: [
-                    AppGap.md,
+            SizedBox(height: 10),
 
-                    Text(
-                      "البيانات الشخصية",
-                      style: AppDesign.h2Style.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+            Text(
+              "البيانات الشخصية",
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
 
-                    AppGap.lg,
+            // الحقول
+            buildField("الاسم الأول", firstName, Icons.person, firstNameError),
+            buildField("اسم العائلة", lastName, Icons.person, lastNameError),
+            buildField("رقم الجوال", phone, Icons.phone, phoneError),
 
-                    buildField("الاسم الأول", firstName, Icons.person),
-                    buildField("الاسم الأخير", lastName, Icons.person),
-                    buildField("رقم الجوال", phone, Icons.phone),
-                    buildField("البريد الإلكتروني", email, Icons.email),
-                    buildField(
-                      "كلمة المرور",
-                      password,
-                      Icons.lock,
-                      isPassword: true,
-                    ),
-                    buildField(
-                      "تأكيد كلمة المرور",
-                      confirmPassword,
-                      Icons.lock,
-                      isPassword: true,
-                    ),
+            SizedBox(height: 20),
 
-                    AppGap.xl,
-
-                    Padding(
-                      padding: AppPadding.horizontal,
-                      child: ElevatedButton(
-                        onPressed: signup,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppDesign.primary,
-                          minimumSize: Size(double.infinity, 56),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(60),
-                          ),
-                        ),
-                        child: Text(
-                          "إنشاء الحساب",
-                          style: AppDesign.buttonOnPrimaryStyle.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    AppGap.xl,
-                  ],
+            // زر
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: ElevatedButton(
+                onPressed: signup,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFF0F5C63),
+                  minimumSize: Size(double.infinity, 55),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30),
+                  ),
                 ),
+                child: Text("إنشاء الحساب"),
               ),
             ),
           ],
@@ -221,40 +178,50 @@ class _SignUpPageState extends State<SignUpPage> {
   Widget buildField(
     String label,
     TextEditingController controller,
-    IconData icon, {
-    bool isPassword = false,
-  }) {
+    IconData icon,
+    String? errorText,
+  ) {
     return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppDesign.spaceLG,
-        vertical: AppDesign.spaceSM,
-      ),
+      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Text(
-            label,
-            style: AppDesign.bodySecondaryStyle.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          Text(label),
           SizedBox(height: 6),
           TextField(
             controller: controller,
-            obscureText: isPassword,
-            style: TextStyle(
-              fontFamily: AppDesign.fontFamily,
-              fontWeight: FontWeight.w500,
-            ),
+            textAlign: TextAlign.right,
+            onChanged: (value) {
+              setState(() {
+                if (controller == phone && value.isNotEmpty) phoneError = null;
+              });
+
+              if (controller == phone) {
+                if (_debouncePhone?.isActive ?? false) _debouncePhone!.cancel();
+                _debouncePhone = Timer(Duration(milliseconds: 500), () async {
+                  var result = await FirebaseFirestore.instance
+                      .collection('Users')
+                      .where('phone', isEqualTo: value.trim())
+                      .get();
+
+                  if (result.docs.isNotEmpty) {
+                    setState(() {
+                      phoneError = "رقم الجوال مستخدم مسبقاً";
+                    });
+                  }
+                });
+              }
+            },
             decoration: InputDecoration(
               filled: true,
-              fillColor: AppDesign.white,
-              prefixIcon: Icon(icon, color: AppDesign.textSecondary),
+              fillColor: Colors.white,
+              prefixIcon: Icon(icon),
+              errorText: errorText,
+              errorStyle: TextStyle(color: Colors.red),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(30),
                 borderSide: BorderSide.none,
               ),
-              contentPadding: EdgeInsets.symmetric(vertical: 16),
             ),
           ),
         ],
