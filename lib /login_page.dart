@@ -1,99 +1,93 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
-import 'dart:math';
-
 import 'signup_page.dart';
 import 'otp_page.dart';
-import 'donor_home_page.dart';
-import 'beneficiary_home_page.dart';
 import 'app_design.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
-
   @override
-  State<LoginPage> createState() => _LoginPageState();
+  _LoginPageState createState() => _LoginPageState();
 }
 
 class _LoginPageState extends State<LoginPage> {
   final email = TextEditingController();
-  final password = TextEditingController();
+  String? emailError;
+  String? generalError;
 
   Future<void> login() async {
-    String emailText = email.text.trim().toLowerCase();
+    String phoneText = email.text.trim();
 
-    if (emailText.isEmpty || password.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("أدخل الإيميل وكلمة المرور")),
-      );
-      return;
+    setState(() {
+      emailError = null;
+      generalError = null;
+    });
+
+    bool hasError = false;
+
+    if (phoneText.isEmpty) {
+      emailError = "الرجاء تعبئة الحقل";
+      hasError = true;
+    } else if (phoneText.length != 10 || !phoneText.startsWith('05')) {
+      emailError = "رقم الجوال غير صحيح";
+      hasError = true;
     }
 
-    if (!emailText.contains('@')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("الإيميل غير صحيح")),
-      );
+    if (hasError) {
+      setState(() {});
       return;
     }
 
     try {
-      // 🔐 تسجيل دخول Firebase Auth
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: emailText,
-        password: password.text,
-      );
-
-      // 🔎 جلب بيانات المستخدم من Firestore
-      final userQuery = await FirebaseFirestore.instance
+      var userCheck = await FirebaseFirestore.instance
           .collection('Users')
-          .where('email', isEqualTo: emailText)
-          .limit(1)
+          .where('phone', isEqualTo: phoneText)
           .get();
 
-      if (userQuery.docs.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("المستخدم غير موجود في النظام")),
-        );
+      if (userCheck.docs.isEmpty) {
+        setState(() {
+          emailError = "رقم الجوال غير مسجل";
+        });
         return;
       }
 
-      final userData = userQuery.docs.first.data();
-      final role = userData['role'] ?? '';
+      await FirebaseAuth.instance.verifyPhoneNumber(
+        phoneNumber: phoneText.startsWith('0')
+            ? "+966${phoneText.substring(1)}"
+            : "+966$phoneText",
 
-      // 🔑 إرسال OTP
-      String otp = (100000 + Random().nextInt(900000)).toString();
+        verificationCompleted: (_) {},
 
-      final callable =
-          FirebaseFunctions.instance.httpsCallable('sendSignupOtp');
+        verificationFailed: (e) {
+          setState(() {
+            generalError = "فشل إرسال الكود";
+          });
+        },
 
-      await callable.call({
-        "email": emailText,
-        "otp": otp,
-      });
+        codeSent: (verificationId, _) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => OtpPage(
+                correctCode: verificationId,
+                firstName: '',
+                lastName: '',
+                email: '',
+                phone: phoneText,
+                isLogin: true,
+              ),
+            ),
+          );
+        },
 
-      // 📩 فتح صفحة OTP
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => OtpPage(
-            correctCode: otp,
-            firstName: '',
-            lastName: '',
-            email: emailText,
-            phone: '',
-            isLogin: true,
-            password: password.text,
-          ),
-        ),
+        codeAutoRetrievalTimeout: (_) {},
       );
-
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("الإيميل أو كلمة المرور غير صحيحة ❌")),
-      );
+      setState(() {
+        generalError = "حدث خطأ، حاول مرة أخرى";
+      });
     }
   }
 
@@ -104,14 +98,13 @@ class _LoginPageState extends State<LoginPage> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-
-            /// 🔹 صورة
+            //  الهيدر
             Stack(
               children: [
                 Container(
                   height: 220,
                   width: double.infinity,
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     image: DecorationImage(
                       image: AssetImage('assets/images/madad_icon.jpeg'),
                       fit: BoxFit.cover,
@@ -122,7 +115,7 @@ class _LoginPageState extends State<LoginPage> {
                   top: 40,
                   left: 10,
                   child: IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    icon: Icon(Icons.arrow_back, color: Colors.white),
                     onPressed: () {
                       Navigator.pushReplacementNamed(context, '/');
                     },
@@ -136,7 +129,6 @@ class _LoginPageState extends State<LoginPage> {
                 padding: AppPadding.screen,
                 child: Column(
                   children: [
-
                     AppGap.md,
 
                     Text(
@@ -148,28 +140,42 @@ class _LoginPageState extends State<LoginPage> {
 
                     AppGap.lg,
 
-                    /// email
-                    _field("البريد الإلكتروني", email, Icons.email),
+                    if (generalError != null)
+                      Padding(
+                        padding: EdgeInsets.only(bottom: 10),
+                        child: Text(
+                          generalError!,
+                          style: TextStyle(color: Colors.red, fontSize: 13),
+                        ),
+                      ),
 
-                    /// password
-                    _field("كلمة المرور", password, Icons.lock,
-                        isPassword: true),
+                    // 📱 رقم الجوال
+                    buildField(
+                      "رقم الجوال",
+                      email,
+                      Icons.phone,
+                      errorText: emailError,
+                    ),
 
                     AppGap.xl,
 
-                    /// button
-                    ElevatedButton(
-                      onPressed: login,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppDesign.primary,
-                        minimumSize: const Size(double.infinity, 56),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(60),
+                    Padding(
+                      padding: AppPadding.horizontal,
+                      child: ElevatedButton(
+                        onPressed: login,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppDesign.primary,
+                          minimumSize: Size(double.infinity, 56),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(60),
+                          ),
                         ),
-                      ),
-                      child: Text(
-                        "تسجيل الدخول",
-                        style: AppDesign.buttonOnPrimaryStyle,
+                        child: Text(
+                          "تسجيل الدخول",
+                          style: AppDesign.buttonOnPrimaryStyle.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
                     ),
 
@@ -179,8 +185,7 @@ class _LoginPageState extends State<LoginPage> {
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(
-                              builder: (_) =>  SignUpPage()),
+                          MaterialPageRoute(builder: (_) => SignUpPage()),
                         );
                       },
                       child: Text(
@@ -198,8 +203,12 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  Widget _field(String label, TextEditingController controller, IconData icon,
-      {bool isPassword = false}) {
+  Widget buildField(
+    String label,
+    TextEditingController controller,
+    IconData icon, {
+    String? errorText,
+  }) {
     return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: AppDesign.spaceLG,
@@ -208,21 +217,38 @@ class _LoginPageState extends State<LoginPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Text(label,
-              style: AppDesign.bodySecondaryStyle
-                  .copyWith(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 6),
+          Text(
+            label,
+            style: AppDesign.bodySecondaryStyle.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          SizedBox(height: 6),
           TextField(
             controller: controller,
-            obscureText: isPassword,
+            style: TextStyle(
+              fontFamily: AppDesign.fontFamily,
+              fontWeight: FontWeight.w500,
+            ),
             decoration: InputDecoration(
               filled: true,
               fillColor: AppDesign.white,
-              prefixIcon: Icon(icon),
+              prefixIcon: Icon(icon, color: AppDesign.textSecondary),
+              errorText: errorText,
+              errorStyle: TextStyle(color: Colors.red, fontSize: 12),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(30),
+                borderSide: BorderSide(color: Colors.red),
+              ),
+              focusedErrorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(30),
+                borderSide: BorderSide(color: Colors.red, width: 1.5),
+              ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(30),
                 borderSide: BorderSide.none,
               ),
+              contentPadding: EdgeInsets.symmetric(vertical: 16),
             ),
           ),
         ],
