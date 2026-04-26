@@ -14,6 +14,7 @@ class OtpPage extends StatefulWidget {
   final String phone;
   final bool isLogin;
   final String password;
+  
 
   OtpPage({
     required this.correctCode,
@@ -22,7 +23,9 @@ class OtpPage extends StatefulWidget {
     required this.email,
     required this.phone,
     required this.isLogin,
+  
     required this.password,
+    
   });
 
   @override
@@ -46,16 +49,12 @@ class _OtpPageState extends State<OtpPage> {
     seconds = 30;
 
     Future.doWhile(() async {
-      await Future.delayed(Duration(seconds: 1));
+      await Future.delayed(const Duration(seconds: 1));
       if (seconds > 0) {
-        setState(() {
-          seconds--;
-        });
+        setState(() => seconds--);
         return true;
       } else {
-        setState(() {
-          canResend = true;
-        });
+        setState(() => canResend = true);
         return false;
       }
     });
@@ -64,7 +63,8 @@ class _OtpPageState extends State<OtpPage> {
   Future<void> resendCode() async {
     String newOtp = (100000 + Random().nextInt(900000)).toString();
 
-    final callable = FirebaseFunctions.instance.httpsCallable('sendSignupOtp');
+    final callable =
+        FirebaseFunctions.instance.httpsCallable('sendSignupOtp');
 
     await callable.call({"email": widget.email, "otp": newOtp});
 
@@ -72,34 +72,83 @@ class _OtpPageState extends State<OtpPage> {
 
     startTimer();
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text("تم إرسال كود جديد")));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text("تم إرسال كود جديد")));
+  }
+
+  /// 🔥 دالة التوجيه حسب الدور
+  Future<void> navigateBasedOnRole() async {
+    try {
+      final normalizedEmail = widget.email.trim().toLowerCase();
+
+      final userQuery = await FirebaseFirestore.instance
+          .collection('Users')
+          .where('email', isEqualTo: normalizedEmail)
+          .limit(1)
+          .get();
+
+      if (userQuery.docs.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("المستخدم غير موجود")),
+        );
+        return;
+      }
+
+      final userData = userQuery.docs.first.data();
+      final role =
+          userData['role']?.toString().trim().toLowerCase() ?? '';
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text("أهلاً وسهلاً بك 👋"),
+          backgroundColor: AppDesign.primary,
+        ),
+      );
+
+      /// 🔥 التوجيه
+      if (role == 'donor') {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (_) => DonorHomePage(userEmail: widget.email),
+          ),
+          (route) => false,
+        );
+      } else if (role == 'beneficiary') {
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          '/beneficiaryHome',
+          (route) => false,
+          arguments: widget.email,
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("نوع المستخدم غير معروف")),
+        );
+      }
+    } catch (e) {
+      debugPrint("Role Error: $e");
+    }
   }
 
   Future<void> verifyCode() async {
     try {
       if (codeController.text.trim().isEmpty) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("رجاءً أدخل رمز التحقق")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("رجاءً أدخل رمز التحقق")),
+        );
         return;
       }
 
       if (codeController.text.trim() == widget.correctCode) {
-        if (widget.isLogin) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text("أهلاً وسهلاً بك 👋"),
-              backgroundColor: AppDesign.primary,
-            ),
-          );
-        } else {
+
+        /// 🔹 تسجيل جديد
+        if (!widget.isLogin) {
           final userCredential = await FirebaseAuth.instance
               .createUserWithEmailAndPassword(
-                email: widget.email,
-                password: widget.password,
-              );
+            email: widget.email,
+            password: widget.password,
+          );
 
           var userRef = FirebaseFirestore.instance
               .collection('Users')
@@ -111,36 +160,25 @@ class _OtpPageState extends State<OtpPage> {
             'lastName': widget.lastName,
             'email': widget.email.trim().toLowerCase(),
             'phone': widget.phone,
-            'role': 'donor',
+            'role': 'donor', 
             'createdAt': FieldValue.serverTimestamp(),
           });
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text("أهلاً وسهلاً بك 👋"),
-              backgroundColor: AppDesign.primary,
-            ),
-          );
         }
 
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(
-            builder: (_) => DonorHomePage(userEmail: widget.email),
-          ),
-          (route) => false,
-        );
+        /// 🔥 أهم خطوة: التوجيه حسب الدور
+        await navigateBasedOnRole();
+
       } else {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("الكود غير صحيح")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("الكود غير صحيح")),
+        );
 
         codeController.clear();
       }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(" خطأ ❌")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("خطأ ❌")),
+      );
     }
   }
 
@@ -154,7 +192,7 @@ class _OtpPageState extends State<OtpPage> {
             Container(
               height: 220,
               width: double.infinity,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 image: DecorationImage(
                   image: AssetImage('assets/images/madad_icon.jpeg'),
                   fit: BoxFit.cover,
@@ -165,9 +203,8 @@ class _OtpPageState extends State<OtpPage> {
             Padding(
               padding: AppPadding.screen,
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.lock, size: 70, color: AppDesign.primary),
+                  const Icon(Icons.lock, size: 70, color: AppDesign.primary),
 
                   AppGap.md,
 
@@ -183,14 +220,10 @@ class _OtpPageState extends State<OtpPage> {
                   TextField(
                     controller: codeController,
                     keyboardType: TextInputType.number,
-                    style: TextStyle(fontFamily: AppDesign.fontFamily),
                     decoration: InputDecoration(
                       filled: true,
                       fillColor: AppDesign.white,
-                      prefixIcon: Icon(
-                        Icons.lock,
-                        color: AppDesign.textSecondary,
-                      ),
+                      prefixIcon: const Icon(Icons.lock),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(30),
                         borderSide: BorderSide.none,
@@ -201,19 +234,17 @@ class _OtpPageState extends State<OtpPage> {
                   AppGap.lg,
 
                   ElevatedButton(
+                    onPressed: verifyCode,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppDesign.primary,
-                      minimumSize: Size(double.infinity, 56),
+                      minimumSize: const Size(double.infinity, 56),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(60),
                       ),
                     ),
-                    onPressed: verifyCode,
                     child: Text(
                       "تأكيد",
-                      style: AppDesign.buttonOnPrimaryStyle.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: AppDesign.buttonOnPrimaryStyle,
                     ),
                   ),
 
@@ -225,7 +256,6 @@ class _OtpPageState extends State<OtpPage> {
                       canResend
                           ? "إعادة إرسال الكود"
                           : "إعادة الإرسال خلال $seconds ثانية",
-                      style: AppDesign.bodySecondaryStyle,
                     ),
                   ),
                 ],
