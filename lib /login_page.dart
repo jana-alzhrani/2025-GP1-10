@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'dart:math';
+
 import 'signup_page.dart';
 import 'otp_page.dart';
+import 'donor_home_page.dart';
+import 'beneficiary_home_page.dart';
 import 'app_design.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
+
   @override
-  _LoginPageState createState() => _LoginPageState();
+  State<LoginPage> createState() => _LoginPageState();
 }
 
 class _LoginPageState extends State<LoginPage> {
@@ -21,33 +26,55 @@ class _LoginPageState extends State<LoginPage> {
     String emailText = email.text.trim().toLowerCase();
 
     if (emailText.isEmpty || password.text.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("أدخل الإيميل وكلمة المرور")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("أدخل الإيميل وكلمة المرور")),
+      );
       return;
     }
 
     if (!emailText.contains('@')) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("الإيميل غير صحيح")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("الإيميل غير صحيح")),
+      );
       return;
     }
 
     try {
+      // 🔐 تسجيل دخول Firebase Auth
       await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: emailText,
         password: password.text,
       );
 
+      // 🔎 جلب بيانات المستخدم من Firestore
+      final userQuery = await FirebaseFirestore.instance
+          .collection('Users')
+          .where('email', isEqualTo: emailText)
+          .limit(1)
+          .get();
+
+      if (userQuery.docs.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("المستخدم غير موجود في النظام")),
+        );
+        return;
+      }
+
+      final userData = userQuery.docs.first.data();
+      final role = userData['role'] ?? '';
+
+      // 🔑 إرسال OTP
       String otp = (100000 + Random().nextInt(900000)).toString();
 
-      final callable = FirebaseFunctions.instance.httpsCallable(
-        'sendSignupOtp',
-      );
+      final callable =
+          FirebaseFunctions.instance.httpsCallable('sendSignupOtp');
 
-      await callable.call({"email": emailText, "otp": otp});
+      await callable.call({
+        "email": emailText,
+        "otp": otp,
+      });
 
+      // 📩 فتح صفحة OTP
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -62,9 +89,10 @@ class _LoginPageState extends State<LoginPage> {
           ),
         ),
       );
+
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("الإيميل أو كلمة المرور غير صحيحة ❌")),
+        const SnackBar(content: Text("الإيميل أو كلمة المرور غير صحيحة ❌")),
       );
     }
   }
@@ -76,12 +104,14 @@ class _LoginPageState extends State<LoginPage> {
       body: SingleChildScrollView(
         child: Column(
           children: [
+
+            /// 🔹 صورة
             Stack(
               children: [
                 Container(
                   height: 220,
                   width: double.infinity,
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     image: DecorationImage(
                       image: AssetImage('assets/images/madad_icon.jpeg'),
                       fit: BoxFit.cover,
@@ -92,7 +122,7 @@ class _LoginPageState extends State<LoginPage> {
                   top: 40,
                   left: 10,
                   child: IconButton(
-                    icon: Icon(Icons.arrow_back, color: Colors.white),
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
                     onPressed: () {
                       Navigator.pushReplacementNamed(context, '/');
                     },
@@ -106,6 +136,7 @@ class _LoginPageState extends State<LoginPage> {
                 padding: AppPadding.screen,
                 child: Column(
                   children: [
+
                     AppGap.md,
 
                     Text(
@@ -117,33 +148,28 @@ class _LoginPageState extends State<LoginPage> {
 
                     AppGap.lg,
 
-                    buildField("البريد الإلكتروني", email, Icons.email),
-                    buildField(
-                      "كلمة المرور",
-                      password,
-                      Icons.lock,
-                      isPassword: true,
-                    ),
+                    /// email
+                    _field("البريد الإلكتروني", email, Icons.email),
+
+                    /// password
+                    _field("كلمة المرور", password, Icons.lock,
+                        isPassword: true),
 
                     AppGap.xl,
 
-                    Padding(
-                      padding: AppPadding.horizontal,
-                      child: ElevatedButton(
-                        onPressed: login,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppDesign.primary,
-                          minimumSize: Size(double.infinity, 56),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(60),
-                          ),
+                    /// button
+                    ElevatedButton(
+                      onPressed: login,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppDesign.primary,
+                        minimumSize: const Size(double.infinity, 56),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(60),
                         ),
-                        child: Text(
-                          "تسجيل الدخول",
-                          style: AppDesign.buttonOnPrimaryStyle.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                      ),
+                      child: Text(
+                        "تسجيل الدخول",
+                        style: AppDesign.buttonOnPrimaryStyle,
                       ),
                     ),
 
@@ -153,7 +179,8 @@ class _LoginPageState extends State<LoginPage> {
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => SignUpPage()),
+                          MaterialPageRoute(
+                              builder: (_) =>  SignUpPage()),
                         );
                       },
                       child: Text(
@@ -171,12 +198,8 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  Widget buildField(
-    String label,
-    TextEditingController controller,
-    IconData icon, {
-    bool isPassword = false,
-  }) {
+  Widget _field(String label, TextEditingController controller, IconData icon,
+      {bool isPassword = false}) {
     return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: AppDesign.spaceLG,
@@ -185,29 +208,21 @@ class _LoginPageState extends State<LoginPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Text(
-            label,
-            style: AppDesign.bodySecondaryStyle.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          SizedBox(height: 6),
+          Text(label,
+              style: AppDesign.bodySecondaryStyle
+                  .copyWith(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 6),
           TextField(
             controller: controller,
             obscureText: isPassword,
-            style: TextStyle(
-              fontFamily: AppDesign.fontFamily,
-              fontWeight: FontWeight.w500,
-            ),
             decoration: InputDecoration(
               filled: true,
               fillColor: AppDesign.white,
-              prefixIcon: Icon(icon, color: AppDesign.textSecondary),
+              prefixIcon: Icon(icon),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(30),
                 borderSide: BorderSide.none,
               ),
-              contentPadding: EdgeInsets.symmetric(vertical: 16),
             ),
           ),
         ],
