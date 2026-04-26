@@ -657,7 +657,7 @@ class _DeliveryMethodPageState extends State<DeliveryMethodPage> {
           ),
           AppGap.xs,
           Text(
-            'اختاري الطريقة المناسبة لإيصال التبرع إلى مستودع مدد.',
+            'اختار الطريقة المناسبة لإيصال التبرع إلى مستودع مدد.',
             style: AppDesign.bodySecondaryStyle,
           ),
         ],
@@ -710,7 +710,7 @@ class _DeliveryMethodPageState extends State<DeliveryMethodPage> {
                   _methodCard(
                     value: 'pickup',
                     title: 'استلام من موقعي',
-                    subtitle: 'سيتم استلام التبرع من العنوان الوطني المختصر.',
+                    subtitle: '',
                     icon: Icons.local_shipping_outlined,
                   ),
                   if (selectedMethod == 'pickup') _pickupSection(),
