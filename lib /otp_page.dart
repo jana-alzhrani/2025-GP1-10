@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
-import 'dart:math';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'donor_home_page.dart';
+import 'Beneficiary_home_page.dart';
 import 'app_design.dart';
 
 class OtpPage extends StatefulWidget {
@@ -13,8 +12,6 @@ class OtpPage extends StatefulWidget {
   final String email;
   final String phone;
   final bool isLogin;
-  final String password;
-  
 
   OtpPage({
     required this.correctCode,
@@ -23,9 +20,6 @@ class OtpPage extends StatefulWidget {
     required this.email,
     required this.phone,
     required this.isLogin,
-  
-    required this.password,
-    
   });
 
   @override
@@ -49,63 +43,88 @@ class _OtpPageState extends State<OtpPage> {
     seconds = 30;
 
     Future.doWhile(() async {
-      await Future.delayed(const Duration(seconds: 1));
+      await Future.delayed(Duration(seconds: 1));
       if (seconds > 0) {
-        setState(() => seconds--);
+        setState(() {
+          seconds--;
+        });
         return true;
       } else {
-        setState(() => canResend = true);
+        setState(() {
+          canResend = true;
+        });
         return false;
       }
     });
   }
 
   Future<void> resendCode() async {
-    String newOtp = (100000 + Random().nextInt(900000)).toString();
-
-    final callable =
-        FirebaseFunctions.instance.httpsCallable('sendSignupOtp');
-
-    await callable.call({"email": widget.email, "otp": newOtp});
-
-    widget.correctCode = newOtp;
+    await FirebaseAuth.instance.verifyPhoneNumber(
+      phoneNumber: widget.phone.startsWith('0')
+          ? "+966${widget.phone.substring(1)}"
+          : "+966${widget.phone}",
+      verificationCompleted: (PhoneAuthCredential credential) async {},
+      verificationFailed: (FirebaseAuthException e) {
+        print(e.message);
+      },
+      codeSent: (String verificationId, int? resendToken) {
+        widget.correctCode = verificationId;
+      },
+      codeAutoRetrievalTimeout: (String verificationId) {},
+    );
 
     startTimer();
 
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text("تم إرسال كود جديد")));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text("تم إرسال كود جديد")));
   }
 
-  /// 🔥 دالة التوجيه حسب الدور
-  Future<void> navigateBasedOnRole() async {
+  Future<void> verifyCode() async {
     try {
-      final normalizedEmail = widget.email.trim().toLowerCase();
-
-      final userQuery = await FirebaseFirestore.instance
-          .collection('Users')
-          .where('email', isEqualTo: normalizedEmail)
-          .limit(1)
-          .get();
-
-      if (userQuery.docs.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("المستخدم غير موجود")),
-        );
+      if (codeController.text.trim().isEmpty) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("رجاءً أدخل رمز التحقق")));
         return;
       }
 
-      final userData = userQuery.docs.first.data();
-      final role =
-          userData['role']?.toString().trim().toLowerCase() ?? '';
+      PhoneAuthCredential credential = PhoneAuthProvider.credential(
+        verificationId: widget.correctCode,
+        smsCode: codeController.text.trim(),
+      );
+
+      await FirebaseAuth.instance.signInWithCredential(credential);
+
+      var userRef = FirebaseFirestore.instance
+          .collection('Users')
+          .doc(FirebaseAuth.instance.currentUser!.uid);
+
+      // 🆕 مستخدم جديد
+      if (!widget.isLogin) {
+        await userRef.set({
+          'userId': FirebaseAuth.instance.currentUser!.uid,
+          'firstName': widget.firstName,
+          'lastName': widget.lastName,
+          'email': widget.email,
+          'phone': widget.phone,
+          'role': 'donor',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      //  جلب البيانات
+      var userData = await userRef.get();
+      var role = userData['role'];
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text("أهلاً وسهلاً بك 👋"),
+          content: Text("أهلاً وسهلاً بك 👋"),
           backgroundColor: AppDesign.primary,
         ),
       );
 
-      /// 🔥 التوجيه
+      //  التوجيه حسب الرول
       if (role == 'donor') {
         Navigator.pushAndRemoveUntil(
           context,
@@ -114,71 +133,21 @@ class _OtpPageState extends State<OtpPage> {
           ),
           (route) => false,
         );
-      } else if (role == 'beneficiary') {
-        Navigator.pushNamedAndRemoveUntil(
+      } else {
+        Navigator.pushAndRemoveUntil(
           context,
-          '/beneficiaryHome',
+          MaterialPageRoute(
+            builder: (_) => BeneficiaryHomePage(userEmail: widget.email),
+          ),
           (route) => false,
-          arguments: widget.email,
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("نوع المستخدم غير معروف")),
         );
       }
     } catch (e) {
-      debugPrint("Role Error: $e");
-    }
-  }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("الكود غير صحيح")));
 
-  Future<void> verifyCode() async {
-    try {
-      if (codeController.text.trim().isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("رجاءً أدخل رمز التحقق")),
-        );
-        return;
-      }
-
-      if (codeController.text.trim() == widget.correctCode) {
-
-        /// 🔹 تسجيل جديد
-        if (!widget.isLogin) {
-          final userCredential = await FirebaseAuth.instance
-              .createUserWithEmailAndPassword(
-            email: widget.email,
-            password: widget.password,
-          );
-
-          var userRef = FirebaseFirestore.instance
-              .collection('Users')
-              .doc(userCredential.user!.uid);
-
-          await userRef.set({
-            'userId': userCredential.user!.uid,
-            'firstName': widget.firstName,
-            'lastName': widget.lastName,
-            'email': widget.email.trim().toLowerCase(),
-            'phone': widget.phone,
-            'role': 'donor', 
-            'createdAt': FieldValue.serverTimestamp(),
-          });
-        }
-
-        /// 🔥 أهم خطوة: التوجيه حسب الدور
-        await navigateBasedOnRole();
-
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("الكود غير صحيح")),
-        );
-
-        codeController.clear();
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("خطأ ❌")),
-      );
+      codeController.clear();
     }
   }
 
@@ -192,7 +161,7 @@ class _OtpPageState extends State<OtpPage> {
             Container(
               height: 220,
               width: double.infinity,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 image: DecorationImage(
                   image: AssetImage('assets/images/madad_icon.jpeg'),
                   fit: BoxFit.cover,
@@ -203,8 +172,9 @@ class _OtpPageState extends State<OtpPage> {
             Padding(
               padding: AppPadding.screen,
               child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.lock, size: 70, color: AppDesign.primary),
+                  Icon(Icons.lock, size: 70, color: AppDesign.primary),
 
                   AppGap.md,
 
@@ -220,10 +190,14 @@ class _OtpPageState extends State<OtpPage> {
                   TextField(
                     controller: codeController,
                     keyboardType: TextInputType.number,
+                    style: TextStyle(fontFamily: AppDesign.fontFamily),
                     decoration: InputDecoration(
                       filled: true,
                       fillColor: AppDesign.white,
-                      prefixIcon: const Icon(Icons.lock),
+                      prefixIcon: Icon(
+                        Icons.lock,
+                        color: AppDesign.textSecondary,
+                      ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(30),
                         borderSide: BorderSide.none,
@@ -234,17 +208,19 @@ class _OtpPageState extends State<OtpPage> {
                   AppGap.lg,
 
                   ElevatedButton(
-                    onPressed: verifyCode,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppDesign.primary,
-                      minimumSize: const Size(double.infinity, 56),
+                      minimumSize: Size(double.infinity, 56),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(60),
                       ),
                     ),
+                    onPressed: verifyCode,
                     child: Text(
                       "تأكيد",
-                      style: AppDesign.buttonOnPrimaryStyle,
+                      style: AppDesign.buttonOnPrimaryStyle.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
 
@@ -256,6 +232,7 @@ class _OtpPageState extends State<OtpPage> {
                       canResend
                           ? "إعادة إرسال الكود"
                           : "إعادة الإرسال خلال $seconds ثانية",
+                      style: AppDesign.bodySecondaryStyle,
                     ),
                   ),
                 ],
