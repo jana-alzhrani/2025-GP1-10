@@ -385,10 +385,10 @@ class _ViewDonationPageState extends State<ViewDonationPage>
         AppGap.sm,
 
         ...boxes.map((box) {
-          final data = box.data() as Map<String, dynamic>;
-          final boxCode = data['boxCode'] ?? '---';
-          final boxId = box.id;
-
+final data = box.data() as Map<String, dynamic>;
+final boxCode = data['boxCode'] ?? '---';
+final boxId = box.id;
+final donationId = data['donationId'] ?? '';
           return Container(
             margin: const EdgeInsets.only(bottom: AppDesign.spaceSM),
             padding: const EdgeInsets.all(AppDesign.cardPadding),
@@ -428,7 +428,7 @@ class _ViewDonationPageState extends State<ViewDonationPage>
                       ),
                       AppGap.xs,
                       Text(
-                        "ID: $boxId",
+                        "ID: $donationId",
                         style: AppDesign.captionStyle,
                       ),
                     ],
