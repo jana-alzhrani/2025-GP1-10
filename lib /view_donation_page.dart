@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'app_design.dart';
 import 'edit_donation_page.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 class ViewDonationPage extends StatefulWidget {
   final String userEmail;
@@ -256,6 +258,34 @@ class _ViewDonationPageState extends State<ViewDonationPage>
     }
   }
 
+  Future<void> printBoxLabel(String boxCode, String boxId) async {
+    final pdf = pw.Document();
+
+    pdf.addPage(
+      pw.Page(
+        build: (context) {
+          return pw.Center(
+            child: pw.Column(
+              mainAxisSize: pw.MainAxisSize.min,
+              children: [
+                pw.Text(
+                  boxCode,
+                  style: pw.TextStyle(fontSize: 42),
+                ),
+                  pw.SizedBox(height: 10),
+                  pw.Text("ID: $boxId"),
+                ],
+              ),
+            );
+          },
+        ),
+      );
+
+      await Printing.layoutPdf(
+        onLayout: (format) async => pdf.save(),
+    );
+  }
+
   Widget _buildDonationCard(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
 
@@ -325,6 +355,93 @@ class _ViewDonationPageState extends State<ViewDonationPage>
             ],
           ),
           const SizedBox(height: AppDesign.spaceLG),
+          StreamBuilder<QuerySnapshot>(
+  stream: FirebaseFirestore.instance
+      .collection('donation_boxes')
+      .where('donationId', isEqualTo: doc.id)
+      .snapshots(),
+  builder: (context, snapshot) {
+    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+      return Text(
+        "لا توجد صناديق",
+        style: AppDesign.captionStyle,
+      );
+    }
+
+    final boxes = snapshot.data!.docs;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        AppGap.sm,
+
+        Text(
+          "الصناديق",
+          style: AppDesign.subtitleStyle.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+
+        AppGap.sm,
+
+        ...boxes.map((box) {
+          final data = box.data() as Map<String, dynamic>;
+          final boxCode = data['boxCode'] ?? '---';
+          final boxId = box.id;
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: AppDesign.spaceSM),
+            padding: const EdgeInsets.all(AppDesign.cardPadding),
+            decoration: AppDesign.softCardDecoration,
+            child: Row(
+              children: [
+
+                // زر الطباعة
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppDesign.primary.withOpacity(0.08),
+                    borderRadius:
+                        BorderRadius.circular(AppDesign.radiusMD),
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.print),
+                    color: AppDesign.primary,
+                    onPressed: () {
+                      printBoxLabel(boxCode, boxId);
+                    },
+                  ),
+                ),
+
+                AppGap.wMD,
+
+                // النص
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        boxCode,
+                        style: AppDesign.h2Style.copyWith(
+                          color: AppDesign.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      AppGap.xs,
+                      Text(
+                        "ID: $boxId",
+                        style: AppDesign.captionStyle,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ],
+    );
+  },
+),
           Align(
             alignment: Alignment.centerRight,
             child: Directionality(
