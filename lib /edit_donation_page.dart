@@ -164,6 +164,11 @@ class _EditDonationPageState extends State<EditDonationPage> {
     }
   }
 
+  String generateBoxCode(String donationId, int boxNumber) {
+  final shortId = donationId.substring(0, 4).toUpperCase();
+  return "BX-$boxNumber-$shortId";
+  }
+
   void _updateItemCount(String value) {
     if (value.isEmpty) {
       setState(() {
@@ -379,25 +384,33 @@ class _EditDonationPageState extends State<EditDonationPage> {
         final int boxNumber = entry.key;
         final List<Map<String, dynamic>> items = entry.value;
 
-        await firestore.collection('donation_boxes').add({
-          'donationId': widget.donationId,
-          'boxNumber': boxNumber,
-          'gender': selectedGender,
-          'ageGroup': {
-            'label': selectedAgeGroup!['label'],
-            'min': selectedAgeGroup!['min'],
-            'max': selectedAgeGroup!['max'],
-          },
-          'items': items.map((e) {
-            return {
-              'type': e['type'],
-              'imageBase64': e['image'] != null
-                  ? base64Encode(e['image'] as Uint8List)
-                  : '',
-            };
-          }).toList(),
-          'timestamp': FieldValue.serverTimestamp(),
-        });
+       final boxCode = generateBoxCode(widget.donationId, boxNumber);
+
+await firestore.collection('donation_boxes').add({
+  'donationId': widget.donationId,
+  'boxNumber': boxNumber,
+
+  // ⭐️ الجديد
+  'boxCode': boxCode,
+
+  'gender': selectedGender,
+  'ageGroup': {
+    'label': selectedAgeGroup!['label'],
+    'min': selectedAgeGroup!['min'],
+    'max': selectedAgeGroup!['max'],
+  },
+
+  'items': items.map((e) {
+    return {
+      'type': e['type'],
+      'imageBase64': e['image'] != null
+          ? base64Encode(e['image'] as Uint8List)
+          : '',
+    };
+  }).toList(),
+
+  'timestamp': FieldValue.serverTimestamp(),
+});
       }
 
       if (!mounted) return;
