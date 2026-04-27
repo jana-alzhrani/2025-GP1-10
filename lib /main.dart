@@ -56,13 +56,12 @@ class MyApp extends StatelessWidget {
           return DonorHomePage(userEmail: email);
         },
 
-        '/beneficiaryHome': (context) {
-          final email =
-              (ModalRoute.of(context)?.settings.arguments as String?) ??
-                  userEmail;
-
-          return BeneficiaryHomePage(userEmail: email);
-        },
+           '/beneficiaryHome': (context) {
+  final uid =
+      (ModalRoute.of(context)?.settings.arguments as String?) ??
+          userId;
+  return BeneficiaryHomePage(userId: uid);
+},
 
         '/viewDonation': (context) {
           final email =
