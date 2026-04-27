@@ -96,52 +96,35 @@ class _OtpPageState extends State<OtpPage> {
 
       await FirebaseAuth.instance.signInWithCredential(credential);
 
-      var userRef = FirebaseFirestore.instance
-          .collection('Users')
-          .doc(FirebaseAuth.instance.currentUser!.uid);
+    final uid = FirebaseAuth.instance.currentUser!.uid;
 
-      // 🆕 مستخدم جديد
-      if (!widget.isLogin) {
-        await userRef.set({
-          'userId': FirebaseAuth.instance.currentUser!.uid,
-          'firstName': widget.firstName,
-          'lastName': widget.lastName,
-          'email': widget.email,
-          'phone': widget.phone,
-          'role': 'donor',
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-      }
+var userDoc = await FirebaseFirestore.instance
+    .collection('Users')
+    .doc(uid)
+    .get();
 
-      //  جلب البيانات
-      var userData = await userRef.get();
-      var role = userData['role'];
+final role = (userDoc.data()?['role'] ?? '')
+    .toString()
+    .trim()
+    .toLowerCase();
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("أهلاً وسهلاً بك 👋"),
-          backgroundColor: AppDesign.primary,
-        ),
-      );
-
-      //  التوجيه حسب الرول
-      if (role == 'donor') {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(
-            builder: (_) => DonorHomePage(userEmail: widget.email),
-          ),
-          (route) => false,
-        );
-      } else {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(
-            builder: (_) => BeneficiaryHomePage(userEmail: widget.email),
-          ),
-          (route) => false,
-        );
-      }
+if (role == 'donor') {
+  Navigator.pushAndRemoveUntil(
+    context,
+    MaterialPageRoute(
+      builder: (_) => DonorHomePage(userId: uid),
+    ),
+    (route) => false,
+  );
+} else {
+  Navigator.pushAndRemoveUntil(
+    context,
+    MaterialPageRoute(
+      builder: (_) => BeneficiaryHomePage(userId: uid),
+    ),
+    (route) => false,
+  );
+}
     } catch (e) {
       ScaffoldMessenger.of(
         context,
