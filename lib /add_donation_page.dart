@@ -53,7 +53,7 @@ String? donationId;
   Map<int, List<Map<String, dynamic>>> boxes = {};
 
   Set<int> savedBoxes = {};
-
+  Map<int, String> boxCodes = {}; // ⭐️ جديد
 
 
 final List<Map<String, dynamic>> ageGroups = [
@@ -160,7 +160,14 @@ Map<String, String> typeMap = {
     setState(() {});
 
   }
+  
+  String generateBoxCode(String donationId, int boxNumber) {
+  final shortId = donationId.length >= 5
+      ? donationId.substring(0, 5)
+      : donationId;
 
+  return "BX-${boxNumber.toString().padLeft(2, '0')}-${shortId.toUpperCase()}";
+  }
 
 
   Future<void> _pickItemImage(int box, int index) async {
@@ -436,10 +443,16 @@ if (user == null) {
 
     await createDonationIfNeeded();
 
+    // ⭐️ توليد boxCode
+    if (boxCodes[box] == null || boxCodes[box]!.isEmpty) {
+    boxCodes[box] = generateBoxCode(donationId!, box);
+    }
+
     await firestore.collection('donation_boxes').add({
   'donationId': donationId,
   'userId': user.uid,
   'boxNumber': box,
+  'boxCode': boxCodes[box], // حفظ الكود مع الصندوق
   'gender': selectedGender,
   'ageGroup': {
     'label': selectedAgeGroup!['label'],
