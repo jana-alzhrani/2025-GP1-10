@@ -47,32 +47,24 @@ Future<void> _loadHomeData() async {
         .limit(1)
         .get();
 
-    final donorsFuture =
-        FirebaseFirestore.instance.collection('donors').get();
-
     final donationsFuture =
         FirebaseFirestore.instance.collection('donations').get();
 
-    final beneficiariesUsersFuture = FirebaseFirestore.instance
-        .collection('Users')
-        .where('role', isEqualTo: 'beneficiary') // غيّريها إذا عندكم "مستفيد"
-        .get();
+    final beneficiariesUsersFuture =
+        FirebaseFirestore.instance.collection('Users').get();
 
     final results = await Future.wait([
       userFuture,
-      donorsFuture,
       donationsFuture,
       beneficiariesUsersFuture,
     ]);
 
     if (!mounted) return;
 
-    final userQuery = results[0] as QuerySnapshot<Map<String, dynamic>>;
-    final donorsSnapshot = results[1] as QuerySnapshot<Map<String, dynamic>>;
-    final donationsSnapshot =
-        results[2] as QuerySnapshot<Map<String, dynamic>>;
-    final beneficiariesUsersSnapshot =
-        results[3] as QuerySnapshot<Map<String, dynamic>>;
+
+   final userQuery = results[0];
+   final donationsSnapshot = results[1];
+   final usersSnapshot = results[2];
 
     String fetchedUserName = 'مستخدم';
 
@@ -84,33 +76,51 @@ Future<void> _loadHomeData() async {
       fetchedUserName = fullName.isEmpty ? 'مستخدم' : fullName;
     }
 
-    int totalCompletedItems = 0;
+    final Set<String> publishedDonorIds = {};
+    int totalDeliveredItems = 0;
 
     for (final doc in donationsSnapshot.docs) {
       final data = doc.data();
 
       final status = (data['status'] ?? '').toString().trim().toLowerCase();
-      if (status == 'completed') {
+      final donorId = (data['donorId'] ?? '').toString().trim();
+
+      if (status == 'published' && donorId.isNotEmpty) {
+        publishedDonorIds.add(donorId);
+      }
+
+      if (status == 'delivered') {
         final value = data['numberOfItems'];
 
         if (value is int) {
-          totalCompletedItems += value;
+          totalDeliveredItems += value;
         } else if (value is double) {
-          totalCompletedItems += value.toInt();
+          totalDeliveredItems += value.toInt();
         } else if (value is String) {
-          totalCompletedItems += int.tryParse(value) ?? 0;
+          totalDeliveredItems += int.tryParse(value) ?? 0;
         }
+      }
+    }
+
+    int beneficiariesCount = 0;
+
+    for (final doc in usersSnapshot.docs) {
+      final data = doc.data();
+      final role = (data['role'] ?? '').toString().trim().toLowerCase();
+
+      if (role == 'beneficiary' || role == 'مستفيد') {
+        beneficiariesCount++;
       }
     }
 
     setState(() {
       userName = fetchedUserName;
 
-      donorsCount = donorsSnapshot.docs.length;
+      donorsCount = publishedDonorIds.length;
 
-      clothingCount = totalCompletedItems ~/ 5;
+      clothingCount = totalDeliveredItems ~/ 5;
 
-      familiesCount = beneficiariesUsersSnapshot.docs.length;
+      familiesCount = beneficiariesCount;
     });
   } catch (e) {
     debugPrint('Error loading home data: $e');
