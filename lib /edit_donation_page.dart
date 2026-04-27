@@ -164,10 +164,13 @@ class _EditDonationPageState extends State<EditDonationPage> {
     }
   }
 
-  String generateBoxCode(String donationId, int boxNumber) {
-  final shortId = donationId.substring(0, 4).toUpperCase();
-  return "BX-$boxNumber-$shortId";
-  }
+ String generateBoxCode(String boxId, int boxNumber) {
+  final shortId = boxId.length >= 5
+      ? boxId.substring(0, 5)
+      : boxId;
+
+  return "BX-${boxNumber.toString().padLeft(2, '0')}-${shortId.toUpperCase()}";
+}
 
   void _updateItemCount(String value) {
     if (value.isEmpty) {
@@ -254,13 +257,6 @@ class _EditDonationPageState extends State<EditDonationPage> {
       boxes[box]![index]['error'] = "جاري الفحص...";
     });
 
-    if (_apiKey.trim().isEmpty) {
-      setState(() {
-        boxes[box]![index]['isValid'] = true;
-        boxes[box]![index]['error'] = null;
-      });
-      return;
-    }
 
     final String url =
         'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=$_apiKey';
@@ -376,42 +372,68 @@ class _EditDonationPageState extends State<EditDonationPage> {
           .where('donationId', isEqualTo: widget.donationId)
           .get();
 
-      for (final doc in oldBoxes.docs) {
-        await doc.reference.delete();
-      }
+     for (final doc in oldBoxes.docs) {
+  final boxNumber = doc['boxNumber'];
 
-      for (final entry in boxes.entries) {
-        final int boxNumber = entry.key;
-        final List<Map<String, dynamic>> items = entry.value;
+  if (boxes.containsKey(boxNumber)) {
+    final items = boxes[boxNumber]!;
 
-       final boxCode = generateBoxCode(widget.donationId, boxNumber);
+    await doc.reference.update({
+      'gender': selectedGender,
+      'ageGroup': {
+        'label': selectedAgeGroup!['label'],
+        'min': selectedAgeGroup!['min'],
+        'max': selectedAgeGroup!['max'],
+      },
+      'items': items.map((e) {
+        return {
+          'type': e['type'],
+          'imageBase64': e['image'] != null
+              ? base64Encode(e['image'] as Uint8List)
+              : '',
+        };
+      }).toList(),
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+  }
+}
 
-await firestore.collection('donation_boxes').add({
-  'donationId': widget.donationId,
-  'boxNumber': boxNumber,
+    for (final entry in boxes.entries) {
+  final boxNumber = entry.key;
 
-  // ⭐️ الجديد
-  'boxCode': boxCode,
+  final exists = oldBoxes.docs.any(
+    (doc) => doc['boxNumber'] == boxNumber,
+  );
 
-  'gender': selectedGender,
-  'ageGroup': {
-    'label': selectedAgeGroup!['label'],
-    'min': selectedAgeGroup!['min'],
-    'max': selectedAgeGroup!['max'],
-  },
+  if (!exists) {
+    final docRef = await firestore.collection('donation_boxes').add({
+      'donationId': widget.donationId,
+      'boxNumber': boxNumber,
+      'gender': selectedGender,
+      'ageGroup': {
+        'label': selectedAgeGroup!['label'],
+        'min': selectedAgeGroup!['min'],
+        'max': selectedAgeGroup!['max'],
+      },
+      'items': entry.value.map((e) {
+        return {
+          'type': e['type'],
+          'imageBase64': e['image'] != null
+              ? base64Encode(e['image'] as Uint8List)
+              : '',
+        };
+      }).toList(),
+      'timestamp': FieldValue.serverTimestamp(),
+    });
 
-  'items': items.map((e) {
-    return {
-      'type': e['type'],
-      'imageBase64': e['image'] != null
-          ? base64Encode(e['image'] as Uint8List)
-          : '',
-    };
-  }).toList(),
+    // 🔥 هنا الصح
+    final boxCode = generateBoxCode(docRef.id, boxNumber);
 
-  'timestamp': FieldValue.serverTimestamp(),
-});
-      }
+    await docRef.update({
+      'boxCode': boxCode,
+    });
+  }
+}
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -577,7 +599,7 @@ await firestore.collection('donation_boxes').add({
                 AppGap.wMD,
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: item['type'] as String?,
+                    initialValue: item['type'] as String?,
                     decoration: InputDecoration(
                       labelText: "نوع القطعة",
                       filled: true,
@@ -685,7 +707,7 @@ await firestore.collection('donation_boxes').add({
                     AppGap.section,
 
                     DropdownButtonFormField<String>(
-                      value: selectedGender,
+                      initialValue: selectedGender,
                       decoration: _sharedInputDecoration(
                         label: "الجنس",
                         icon: Icons.person_outline,
@@ -705,7 +727,7 @@ await firestore.collection('donation_boxes').add({
                     AppGap.lg,
 
                     DropdownButtonFormField<Map<String, dynamic>>(
-                      value: selectedAgeGroup,
+                      initialValue: selectedAgeGroup,
                       decoration: _sharedInputDecoration(
                         label: "الفئة العمرية",
                         icon: Icons.cake_outlined,
