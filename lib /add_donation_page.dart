@@ -161,13 +161,13 @@ Map<String, String> typeMap = {
 
   }
   
-  String generateBoxCode(String donationId, int boxNumber) {
-  final shortId = donationId.length >= 5
-      ? donationId.substring(0, 5)
-      : donationId;
+String generateBoxCode(String boxId, int boxNumber) {
+  final shortId = boxId.length >= 5
+      ? boxId.substring(0, 5)
+      : boxId;
 
   return "BX-${boxNumber.toString().padLeft(2, '0')}-${shortId.toUpperCase()}";
-  }
+}
 
 
   Future<void> _pickItemImage(int box, int index) async {
@@ -443,16 +443,11 @@ if (user == null) {
 
     await createDonationIfNeeded();
 
-    // ⭐️ توليد boxCode
-    if (boxCodes[box] == null || boxCodes[box]!.isEmpty) {
-    boxCodes[box] = generateBoxCode(donationId!, box);
-    }
 
     await firestore.collection('donation_boxes').add({
   'donationId': donationId,
   'userId': user.uid,
   'boxNumber': box,
-  'boxCode': boxCodes[box], // حفظ الكود مع الصندوق
   'gender': selectedGender,
   'ageGroup': {
     'label': selectedAgeGroup!['label'],
@@ -472,6 +467,16 @@ if (user == null) {
   }).toList(),
 
   'timestamp': FieldValue.serverTimestamp(),
+});
+
+    final boxId = docRef.id;
+
+// توليد الكود من boxId
+final boxCode = generateBoxCode(boxId, box);
+
+// تحديث نفس الدوكيومنت
+await docRef.update({
+  'boxCode': boxCode,
 });
 
     ScaffoldMessenger.of(context)
