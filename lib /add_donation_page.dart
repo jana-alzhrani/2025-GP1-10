@@ -53,7 +53,7 @@ String? donationId;
   Map<int, List<Map<String, dynamic>>> boxes = {};
 
   Set<int> savedBoxes = {};
-  Map<int, String> boxCodes = {}; // ⭐️ جديد
+  
 
 
 final List<Map<String, dynamic>> ageGroups = [
@@ -444,7 +444,7 @@ if (user == null) {
     await createDonationIfNeeded();
 
 
-    await firestore.collection('donation_boxes').add({
+    final docRef = await firestore.collection('donation_boxes').add({
   'donationId': donationId,
   'userId': user.uid,
   'boxNumber': box,
