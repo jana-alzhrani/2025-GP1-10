@@ -16,13 +16,12 @@ class DonorMorePage extends StatefulWidget {
 }
 
 class _DonorMorePageState extends State<DonorMorePage> {
-  int _bottomNavIndex = 2;
+  final int _bottomNavIndex = 2;
 
   String firstName = '';
   String lastName = '';
   String phone = '';
   String email = '';
-  String maskedPassword = '-';
 
   bool isLoading = true;
 
@@ -52,8 +51,6 @@ class _DonorMorePageState extends State<DonorMorePage> {
       if (userDoc.exists) {
         final data = userDoc.data() ?? {};
 
-        final rawPassword = (data['password'] ?? '').toString().trim();
-
         setState(() {
           firstName = (data['firstName'] ?? '').toString().trim();
           lastName = (data['lastName'] ?? '').toString().trim();
@@ -61,9 +58,6 @@ class _DonorMorePageState extends State<DonorMorePage> {
           email = (data['email'] ?? currentUser.email ?? widget.userEmail)
               .toString()
               .trim();
-
-          maskedPassword =
-              rawPassword.isEmpty ? '-' : '•' * rawPassword.length;
 
           isLoading = false;
         });
@@ -77,7 +71,6 @@ class _DonorMorePageState extends State<DonorMorePage> {
     }
   }
 
-  // 🔴 Popup تسجيل الخروج
   Future<void> _showLogoutDialog() async {
     showDialog(
       context: context,
@@ -114,7 +107,7 @@ class _DonorMorePageState extends State<DonorMorePage> {
 
               Navigator.pushNamedAndRemoveUntil(
                 context,
-                '/welcome',
+                '/',
                 (route) => false,
               );
             },
@@ -169,12 +162,9 @@ class _DonorMorePageState extends State<DonorMorePage> {
                             _buildInfoField('رقم الجوال', phone),
                             AppGap.md,
                             _buildInfoField('البريد الإلكتروني', email),
-                            AppGap.md,
-                            _buildInfoField('كلمة المرور', maskedPassword),
 
                             AppGap.xl,
 
-                            // زر تعديل
                             SizedBox(
                               height: AppDesign.buttonHeightMD,
                               child: ElevatedButton(
@@ -192,7 +182,6 @@ class _DonorMorePageState extends State<DonorMorePage> {
 
                             AppGap.lg,
 
-                            // 🔴 تسجيل الخروج (بدون زر)
                             GestureDetector(
                               onTap: _showLogoutDialog,
                               child: Row(
