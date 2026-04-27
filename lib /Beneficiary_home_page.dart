@@ -2,16 +2,19 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'app_design.dart';
+import 'Beneficiary_more_page.dart';
 
 class BeneficiaryHomePage extends StatefulWidget {
-  final String userEmail;
+final String userId;
 
-  const BeneficiaryHomePage({
-    super.key,
-    required this.userEmail,
-  });
 
-  @override
+const BeneficiaryHomePage({
+  super.key,
+  required this.userId,
+});
+
+
+ @override
   State<BeneficiaryHomePage> createState() => _BeneficiaryHomePageState();
 }
 
@@ -32,28 +35,27 @@ class _BeneficiaryHomePageState extends State<BeneficiaryHomePage> {
     loadBoxes();
   }
 
-  Future<void> loadUserData() async {
-    final query = await FirebaseFirestore.instance
-        .collection('Users')
-        .where('email', isEqualTo: widget.userEmail)
-        .limit(1)
-        .get();
+ Future<void> loadUserData() async {
+  final doc = await FirebaseFirestore.instance
+      .collection('Users')
+      .doc(widget.userId)
+      .get();
 
-    if (query.docs.isNotEmpty) {
-      final data = query.docs.first.data();
-      setState(() {
-        firstName = data['firstName'] ?? "";
-        lastName = data['lastName'] ?? "";
-      });
-    }
+  if (doc.exists) {
+    final data = doc.data()!;
+    setState(() {
+      firstName = data['firstName'] ?? "";
+      lastName = data['lastName'] ?? "";
+    });
   }
+}
 
   Future<void> loadBoxes() async {
     List<Map<String, dynamic>> allBoxes = [];
 
     final donationsSnapshot = await FirebaseFirestore.instance
         .collection('donations')
-        .where('status', isEqualTo: 'In warehouse')
+        .where('status', isEqualTo: 'available')
         .get();
 
     for (var donationDoc in donationsSnapshot.docs) {
@@ -112,8 +114,27 @@ class _BeneficiaryHomePageState extends State<BeneficiaryHomePage> {
     return Scaffold(
       backgroundColor: AppDesign.background,
 
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 2,
+     bottomNavigationBar: BottomNavigationBar(
+  currentIndex: 2,
+  onTap: (index) {
+    if (index == 0) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => BeneficiaryMorePage(userId: widget.userId),
+        ),
+      );
+    }
+
+    if (index == 2) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => BeneficiaryHomePage(userId: widget.userId),
+        ),
+      );
+    }
+  },
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.person), label: "مزيد"),
           BottomNavigationBarItem(icon: Icon(Icons.inventory), label: "طلباتي"),
@@ -213,26 +234,7 @@ class _BeneficiaryHomePageState extends State<BeneficiaryHomePage> {
 ),
             const SizedBox(height: 12),
 
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Row(
-                children: [
-                  _statCard(
-                    icon: Icons.inventory_2,
-                    title: " الصناديق الجاهزة",
-                    value: "${boxes.length}",
-                  ),
-                  const SizedBox(width: 10),
-                  _statCard(
-                    icon: Icons.checkroom,
-                    title: " القطع المتوفرة",
-                    value: "${boxes.fold(0, (s, b) => s + (b["images"] as List).length)}",
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 10),
+           
 
             /// FILTER TITLE
 Padding(
@@ -357,72 +359,133 @@ Padding(
     ),
   );
 }
+Widget _buildFilters() {
+  List<String> genders = ["الكل", "ذكر", "أنثى"];
+  List<String> ages = [
+    "الكل",
+    "رضّع (0-2)",
+    "أطفال (3-5)",
+    "أطفال (6-9)",
+    "أطفال (10-12)",
+    "مراهقون (13-17)",
+    "بالغون (18+)",
+  ];
 
-  Widget _buildFilters() {
-    List<String> genders = ["الكل", "ذكر", "أنثى"];
-    List<String> ages = [
-      "الكل",
-      "رضّع (0-2)",
-      "أطفال (3-5)",
-      "أطفال (6-9)",
-      "أطفال (10-12)",
-      "مراهقون (13-17)",
-      "بالغون (18+)",
-    ];
+  return Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 10),
+    child: Row(
+      children: [
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-      margin: const EdgeInsets.symmetric(horizontal: 6),
+        /// 🔹 التصنيف (الجنس)
+        Expanded(
+          child: _filterCard(
+            title: "التصنيف",
+            value: selectedGender,
+            icon: Icons.person,
+            items: genders,
+            onSelected: (value) {
+              setState(() {
+                selectedGender = value;
+              });
+            },
+          ),
+        ),
+
+        const SizedBox(width: 10),
+
+        /// 🔹 الفئة العمرية
+        Expanded(
+          child: _filterCard(
+            title: "الفئة العمرية",
+            value: selectedAge,
+            icon: Icons.cake,
+            items: ages,
+            onSelected: (value) {
+              setState(() {
+                selectedAge = value;
+              });
+            },
+          ),
+        ),
+      ],
+    ),
+  );
+}
+}
+Widget _filterCard({
+  required String title,
+  required String value,
+  required IconData icon,
+  required List<String> items,
+  required Function(String) onSelected,
+}) {
+  return PopupMenuButton<String>(
+    onSelected: onSelected,
+    itemBuilder: (context) => items.map((e) {
+      return PopupMenuItem(
+        value: e,
+        child: Text(e),
+      );
+    }).toList(),
+    child: Container(
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          )
+        ],
       ),
-      child: Directionality(
+      child: Row(
         textDirection: TextDirection.rtl,
-        child: Column(
-          children: [
+        children: [
 
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              reverse: true,
-              child: Row(
-                children: genders.map((g) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: ChoiceChip(
-                      label: Text(g),
-                      selected: selectedGender == g,
-                      onSelected: (_) => setState(() => selectedGender = g),
-                    ),
-                  );
-                }).toList(),
-              ),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppDesign.primary.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(12),
             ),
+            child: Icon(icon, color: AppDesign.primary),
+          ),
 
-            const SizedBox(height: 10),
+          const SizedBox(width: 10),
 
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              reverse: true,
-              child: Row(
-                children: ages.map((a) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: ChoiceChip(
-                      label: Text(a),
-                      selected: selectedAge == a,
-                      onSelected: (_) => setState(() => selectedAge = a),
-                    ),
-                  );
-                }).toList(),
-              ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade700,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade900,
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+
+          const Icon(Icons.arrow_drop_down),
+        ],
       ),
-    );
-  }
+    ),
+  );
 }
 
 class ClothesBoxCard extends StatelessWidget {
@@ -475,11 +538,11 @@ class ClothesBoxCard extends StatelessWidget {
 
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppDesign.primary,
+                        backgroundColor: const Color.fromARGB(255, 40, 78, 86),
                         foregroundColor: Colors.white,
                       ),
                       onPressed: () {},
-                      child: const Text("عرض"),
+                      child: const Text("عرض التفاصيل "),
                     )
                   ],
                 ),
