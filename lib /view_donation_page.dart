@@ -407,7 +407,7 @@ final donationId = data['donationId'] ?? '';
                     icon: const Icon(Icons.print),
                     color: AppDesign.primary,
                     onPressed: () {
-                      printBoxLabel(boxCode, boxId);
+                      printBoxLabel(boxCode,  donationId);
                     },
                   ),
                 ),
