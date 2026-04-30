@@ -3,11 +3,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'app_design.dart';
 
 class DonorHomePage extends StatefulWidget {
-final String userId;
+  final String userId;
 
   const DonorHomePage({
-   super.key,
-  required this.userId,
+    super.key,
+    required this.userId,
   });
 
   @override
@@ -37,86 +37,94 @@ class _DonorHomePageState extends State<DonorHomePage> {
     super.dispose();
   }
 
-Future<void> _loadHomeData() async {
-  try {
-    final normalizedUserId = widget.userId.trim();
+  Future<void> _loadHomeData() async {
+    try {
+      final userFuture = FirebaseFirestore.instance
+          .collection('Users')
+          .doc(widget.userId)
+          .get();
 
-    final userFuture = FirebaseFirestore.instance
-        .collection('Users')
-        .where('userId', isEqualTo: normalizedUserId)
-        .limit(1)
-        .get();
+      final donationsFuture =
+          FirebaseFirestore.instance.collection('donations').get();
 
-    final donorsFuture =
-        FirebaseFirestore.instance.collection('donors').get();
+      final usersFuture =
+          FirebaseFirestore.instance.collection('Users').get();
 
-    final donationsFuture =
-        FirebaseFirestore.instance.collection('donations').get();
+      final results = await Future.wait([
+        userFuture,
+        donationsFuture,
+        usersFuture,
+      ]);
 
-    final beneficiariesUsersFuture = FirebaseFirestore.instance
-        .collection('Users')
-        .where('role', isEqualTo: 'beneficiary') // غيّريها إذا عندكم "مستفيد"
-        .get();
+      if (!mounted) return;
 
-    final results = await Future.wait([
-      userFuture,
-      donorsFuture,
-      donationsFuture,
-      beneficiariesUsersFuture,
-    ]);
+      final userDoc = results[0] as DocumentSnapshot<Map<String, dynamic>>;
+      final donationsSnapshot =
+          results[1] as QuerySnapshot<Map<String, dynamic>>;
+      final usersSnapshot =
+          results[2] as QuerySnapshot<Map<String, dynamic>>;
 
-    if (!mounted) return;
+      String fetchedUserName = 'مستخدم';
 
-    final userQuery = results[0] as QuerySnapshot<Map<String, dynamic>>;
-    final donorsSnapshot = results[1] as QuerySnapshot<Map<String, dynamic>>;
-    final donationsSnapshot =
-        results[2] as QuerySnapshot<Map<String, dynamic>>;
-    final beneficiariesUsersSnapshot =
-        results[3] as QuerySnapshot<Map<String, dynamic>>;
+      if (userDoc.exists) {
+        final data = userDoc.data() ?? {};
+        final firstName = (data['firstName'] ?? '').toString().trim();
+        final lastName = (data['lastName'] ?? '').toString().trim();
+        final fullName = '$firstName $lastName'.trim();
+        fetchedUserName = fullName.isEmpty ? 'مستخدم' : fullName;
+      }
 
-    String fetchedUserName = 'مستخدم';
+      final Set<String> publishedDonorIds = {};
+      int totalDeliveredItems = 0;
 
-    if (userQuery.docs.isNotEmpty) {
-      final data = userQuery.docs.first.data();
-      final firstName = (data['firstName'] ?? '').toString().trim();
-      final lastName = (data['lastName'] ?? '').toString().trim();
-      final fullName = '$firstName $lastName'.trim();
-      fetchedUserName = fullName.isEmpty ? 'مستخدم' : fullName;
-    }
+      for (final doc in donationsSnapshot.docs) {
+        final data = doc.data();
 
-    int totalCompletedItems = 0;
+        final status = (data['status'] ?? '').toString().trim().toLowerCase();
 
-    for (final doc in donationsSnapshot.docs) {
-      final data = doc.data();
+        final donorId =
+            (data['donorID'] ?? data['donorId'] ?? data['userId'] ?? '')
+                .toString()
+                .trim();
 
-      final status = (data['status'] ?? '').toString().trim().toLowerCase();
-      if (status == 'completed') {
-        final value = data['numberOfItems'];
+        if (status == 'published' && donorId.isNotEmpty) {
+          publishedDonorIds.add(donorId);
+        }
 
-        if (value is int) {
-          totalCompletedItems += value;
-        } else if (value is double) {
-          totalCompletedItems += value.toInt();
-        } else if (value is String) {
-          totalCompletedItems += int.tryParse(value) ?? 0;
+        if (status == 'delivered') {
+          final value = data['numberOfItems'];
+
+          if (value is int) {
+            totalDeliveredItems += value;
+          } else if (value is double) {
+            totalDeliveredItems += value.toInt();
+          } else if (value is String) {
+            totalDeliveredItems += int.tryParse(value) ?? 0;
+          }
         }
       }
+
+      int beneficiariesCount = 0;
+
+      for (final doc in usersSnapshot.docs) {
+        final data = doc.data();
+        final role = (data['role'] ?? '').toString().trim().toLowerCase();
+
+        if (role == 'beneficiary' || role == 'مستفيد') {
+          beneficiariesCount++;
+        }
+      }
+
+      setState(() {
+        userName = fetchedUserName;
+        donorsCount = publishedDonorIds.length;
+        clothingCount = totalDeliveredItems ~/ 5;
+        familiesCount = beneficiariesCount;
+      });
+    } catch (e) {
+      debugPrint('Error loading home data: $e');
     }
-
-    setState(() {
-      userName = fetchedUserName;
-
-      donorsCount = donorsSnapshot.docs.length;
-
-      clothingCount = totalCompletedItems ~/ 5;
-
-      familiesCount = beneficiariesUsersSnapshot.docs.length;
-    });
-  } catch (e) {
-    debugPrint('Error loading home data: $e');
   }
-}
-  
 
   @override
   Widget build(BuildContext context) {
@@ -298,14 +306,14 @@ Future<void> _loadHomeData() async {
         alignment: Alignment.center,
         children: [
           Positioned(
-  left: -20,
-  bottom: -9,
-  child: Image.asset(
-    'assets/images/donate_branch.png',
-    width: 145,
-    fit: BoxFit.contain,
-  ),
-),
+            left: -20,
+            bottom: -9,
+            child: Image.asset(
+              'assets/images/donate_branch.png',
+              width: 145,
+              fit: BoxFit.contain,
+            ),
+          ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
