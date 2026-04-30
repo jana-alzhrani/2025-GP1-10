@@ -28,61 +28,67 @@ void main() async {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
+  String _currentUserId() {
+    return FirebaseAuth.instance.currentUser?.uid ?? '';
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-final userId = user?.uid ?? '';
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: AppDesign.lightTheme,
 
-      home: user == null
-          ? const WelcomePage()
-          : AuthGate(),
+      home: user == null ? const WelcomePage() : const AuthGate(),
 
       routes: {
+        '/welcome': (context) => const WelcomePage(),
+
         '/login': (context) => LoginPage(),
 
         '/signup': (context) => SignUpPage(),
 
-        '/welcome': (context) => const WelcomePage(),
-
         '/donorHome': (context) {
-  final uid =
+          final uid =
               (ModalRoute.of(context)?.settings.arguments as String?) ??
-          userId;
+                  _currentUserId();
+
           return DonorHomePage(userId: uid);
         },
 
-           '/beneficiaryHome': (context) {
-  final uid =
-      (ModalRoute.of(context)?.settings.arguments as String?) ??
-          userId;
-  return BeneficiaryHomePage(userId: uid);
-},
+        '/beneficiaryHome': (context) {
+          final uid =
+              (ModalRoute.of(context)?.settings.arguments as String?) ??
+                  _currentUserId();
+
+          return BeneficiaryHomePage(userId: uid);
+        },
 
         '/viewDonation': (context) {
-          final email =
+          final uid =
               (ModalRoute.of(context)?.settings.arguments as String?) ??
-                  userEmail;
+                  _currentUserId();
 
-          return ViewDonationPage(userEmail: email);
+          return ViewDonationPage(userId: uid);
         },
 
         '/donorMore': (context) {
-          final email =
+          final uid =
               (ModalRoute.of(context)?.settings.arguments as String?) ??
-                  userEmail;
+                  _currentUserId();
 
-          return DonorMorePage(userEmail: email);
+          return DonorMorePage(userId: uid);
         },
 
-'/addDonation': (context) {
-  final userId = ModalRoute.of(context)!.settings.arguments as String;
-  return AddDonationPage(userId: userId);
-},
-        // صفحة اختيار طريقة التوصيل
+        '/addDonation': (context) {
+          final uid =
+              (ModalRoute.of(context)?.settings.arguments as String?) ??
+                  _currentUserId();
+
+          return AddDonationPage(userId: uid);
+        },
+
         '/deliveryMethod': (context) {
           final donationId =
               ModalRoute.of(context)!.settings.arguments as String;
