@@ -78,8 +78,10 @@ final userId = user?.uid ?? '';
           return DonorMorePage(userEmail: email);
         },
 
-'/addDonation': (context) => AddDonationPage(userId: userId),
-
+'/addDonation': (context) {
+  final userId = ModalRoute.of(context)!.settings.arguments as String;
+  return AddDonationPage(userId: userId);
+},
         // صفحة اختيار طريقة التوصيل
         '/deliveryMethod': (context) {
           final donationId =
