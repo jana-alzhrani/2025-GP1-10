@@ -9,46 +9,44 @@ import 'welcome_page.dart';
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
 
-  Future<Widget> _getHome() async {
-    final user = FirebaseAuth.instance.currentUser;
+ Future<Widget> _getHome() async {
+  final user = FirebaseAuth.instance.currentUser;
 
-    //  إذا ما فيه مستخدم
-    if (user == null) {
-      return const WelcomePage();
-    }
-
-    final email = user.email?.trim().toLowerCase() ?? '';
-
-    try {
-      //  نجيب المستخدم من Firestore
-      final userQuery = await FirebaseFirestore.instance
-          .collection('Users')
-          .where('email', isEqualTo: email)
-          .limit(1)
-          .get();
-
-      // إذا ما لقيه
-      if (userQuery.docs.isEmpty) {
-        return const WelcomePage();
-      }
-
-      final data = userQuery.docs.first.data();
-      final role = (data['role'] ?? '').toString().trim().toLowerCase();
-
-      //  توجيه حسب الدور
-      if (role == 'beneficiary') {
-        return BeneficiaryHomePage(userEmail: email);
-      }
-
-      // default = donor
-      return DonorHomePage(userEmail: email);
-
-    } catch (e) {
-      debugPrint("AuthGate Error: $e");
-      return const WelcomePage();
-    }
+  if (user == null) {
+    return const WelcomePage();
   }
 
+  final userId = user.uid;
+
+  try {
+    final doc = await FirebaseFirestore.instance
+        .collection('Users')
+        .doc(userId)
+        .get();
+
+    if (!doc.exists) {
+      return const WelcomePage();
+    }
+
+    final data = doc.data()!;
+    final role = (data['role'] ?? '').toString().trim().toLowerCase();
+
+    if (role == 'beneficiary') {
+    return BeneficiaryHomePage(userId: userId);
+
+
+} else if (role == 'donor') {
+  return DonorHomePage(userId: userId);
+} else {
+  // لو فيه خطأ في البيانات
+  return const WelcomePage();
+}
+
+  } catch (e) {
+    debugPrint("AuthGate Error: $e");
+    return const WelcomePage();
+  }
+}
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<Widget>(
