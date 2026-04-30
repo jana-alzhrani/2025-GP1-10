@@ -3,11 +3,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'app_design.dart';
 
 class DonorHomePage extends StatefulWidget {
-  final String userEmail;
+final String userId;
 
   const DonorHomePage({
-    super.key,
-    required this.userEmail,
+   super.key,
+  required this.userId,
   });
 
   @override
@@ -39,32 +39,40 @@ class _DonorHomePageState extends State<DonorHomePage> {
 
 Future<void> _loadHomeData() async {
   try {
-    final normalizedEmail = widget.userEmail.trim().toLowerCase();
+    final normalizedUserId = widget.userId.trim();
 
     final userFuture = FirebaseFirestore.instance
         .collection('Users')
-        .where('email', isEqualTo: normalizedEmail)
+        .where('userId', isEqualTo: normalizedUserId)
         .limit(1)
         .get();
+
+    final donorsFuture =
+        FirebaseFirestore.instance.collection('donors').get();
 
     final donationsFuture =
         FirebaseFirestore.instance.collection('donations').get();
 
-    final beneficiariesUsersFuture =
-        FirebaseFirestore.instance.collection('Users').get();
+    final beneficiariesUsersFuture = FirebaseFirestore.instance
+        .collection('Users')
+        .where('role', isEqualTo: 'beneficiary') // غيّريها إذا عندكم "مستفيد"
+        .get();
 
     final results = await Future.wait([
       userFuture,
+      donorsFuture,
       donationsFuture,
       beneficiariesUsersFuture,
     ]);
 
     if (!mounted) return;
 
-
-   final userQuery = results[0];
-   final donationsSnapshot = results[1];
-   final usersSnapshot = results[2];
+    final userQuery = results[0] as QuerySnapshot<Map<String, dynamic>>;
+    final donorsSnapshot = results[1] as QuerySnapshot<Map<String, dynamic>>;
+    final donationsSnapshot =
+        results[2] as QuerySnapshot<Map<String, dynamic>>;
+    final beneficiariesUsersSnapshot =
+        results[3] as QuerySnapshot<Map<String, dynamic>>;
 
     String fetchedUserName = 'مستخدم';
 
@@ -76,51 +84,33 @@ Future<void> _loadHomeData() async {
       fetchedUserName = fullName.isEmpty ? 'مستخدم' : fullName;
     }
 
-    final Set<String> publishedDonorIds = {};
-    int totalDeliveredItems = 0;
+    int totalCompletedItems = 0;
 
     for (final doc in donationsSnapshot.docs) {
       final data = doc.data();
 
       final status = (data['status'] ?? '').toString().trim().toLowerCase();
-      final donorId = (data['donorId'] ?? '').toString().trim();
-
-      if (status == 'published' && donorId.isNotEmpty) {
-        publishedDonorIds.add(donorId);
-      }
-
-      if (status == 'delivered') {
+      if (status == 'completed') {
         final value = data['numberOfItems'];
 
         if (value is int) {
-          totalDeliveredItems += value;
+          totalCompletedItems += value;
         } else if (value is double) {
-          totalDeliveredItems += value.toInt();
+          totalCompletedItems += value.toInt();
         } else if (value is String) {
-          totalDeliveredItems += int.tryParse(value) ?? 0;
+          totalCompletedItems += int.tryParse(value) ?? 0;
         }
-      }
-    }
-
-    int beneficiariesCount = 0;
-
-    for (final doc in usersSnapshot.docs) {
-      final data = doc.data();
-      final role = (data['role'] ?? '').toString().trim().toLowerCase();
-
-      if (role == 'beneficiary' || role == 'مستفيد') {
-        beneficiariesCount++;
       }
     }
 
     setState(() {
       userName = fetchedUserName;
 
-      donorsCount = publishedDonorIds.length;
+      donorsCount = donorsSnapshot.docs.length;
 
-      clothingCount = totalDeliveredItems ~/ 5;
+      clothingCount = totalCompletedItems ~/ 5;
 
-      familiesCount = beneficiariesCount;
+      familiesCount = beneficiariesUsersSnapshot.docs.length;
     });
   } catch (e) {
     debugPrint('Error loading home data: $e');
@@ -358,7 +348,7 @@ Future<void> _loadHomeData() async {
                       Navigator.pushNamed(
                         context,
                         '/addDonation',
-                        arguments: widget.userEmail,
+                        arguments: widget.userId,
                       );
                     },
                     style: ElevatedButton.styleFrom(
@@ -477,13 +467,13 @@ Future<void> _loadHomeData() async {
             Navigator.pushReplacementNamed(
               context,
               '/viewDonation',
-              arguments: widget.userEmail,
+              arguments: widget.userId,
             );
           } else if (index == 2) {
             Navigator.pushReplacementNamed(
               context,
               '/donorMore',
-              arguments: widget.userEmail,
+              arguments: widget.userId,
             );
           }
         },
