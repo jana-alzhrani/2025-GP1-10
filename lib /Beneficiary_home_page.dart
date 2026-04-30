@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'app_design.dart';
 import 'Beneficiary_more_page.dart';
+import 'Beneficiary_view_donation_page.dart';
 
 class BeneficiaryHomePage extends StatefulWidget {
 final String userId;
@@ -82,10 +83,11 @@ class _BeneficiaryHomePageState extends State<BeneficiaryHomePage> {
         }
 
         allBoxes.add({
-          "gender": donationData['gender'] ?? 'الكل',
-          "age": donationData['ageGroup'] ?? 'الكل',
-          "images": imagesList,
-        });
+  "donationId": donationId,
+  "gender": donationData['gender'] ?? 'الكل',
+  "age": donationData['ageGroup'] ?? 'الكل',
+  "images": imagesList,
+});
       }
     }
 
@@ -153,8 +155,43 @@ class _BeneficiaryHomePageState extends State<BeneficiaryHomePage> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
 
-                  Icon(Icons.shopping_cart, color: Colors.grey.shade700),
+StreamBuilder<QuerySnapshot>(
+  stream: FirebaseFirestore.instance
+      .collection('cart')
+      .where('beneficiaryId', isEqualTo: widget.userId)
+      .where('status', isEqualTo: 'in_cart')
+      .snapshots(),
+  builder: (context, snapshot) {
+    final count = snapshot.data?.docs.length ?? 0;
 
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Icon(Icons.shopping_cart, color: Colors.grey.shade700),
+        if (count > 0)
+          Positioned(
+            top: -8,
+            right: -8,
+            child: Container(
+              padding: const EdgeInsets.all(5),
+              decoration: const BoxDecoration(
+                color: AppDesign.primary,
+                shape: BoxShape.circle,
+              ),
+              child: Text(
+                '$count',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  },
+),
                   Row(
                     children: [
                       Column(
@@ -280,6 +317,8 @@ Padding(
                                 images: box["images"],
                                 gender: box["gender"],
                                 age: box["age"],
+                                donationId: box["donationId"],
+                                userId: widget.userId,
                               );
                             },
                           ),
@@ -492,12 +531,16 @@ class ClothesBoxCard extends StatelessWidget {
   final List images;
   final String gender;
   final String age;
+  final String donationId;
+  final String userId;
 
   const ClothesBoxCard({
     super.key,
     required this.images,
     required this.gender,
     required this.age,
+    required this.donationId,
+    required this.userId,
   });
 
   @override
@@ -541,7 +584,17 @@ class ClothesBoxCard extends StatelessWidget {
                         backgroundColor: const Color.fromARGB(255, 40, 78, 86),
                         foregroundColor: Colors.white,
                       ),
-                      onPressed: () {},
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => BeneficiaryViewDonationPage(
+                              donationId: donationId,
+                              userId: userId,
+                            ),
+                          ),
+                        );
+                      },
                       child: const Text("عرض التفاصيل "),
                     )
                   ],
