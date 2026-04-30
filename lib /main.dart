@@ -31,7 +31,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-    final userEmail = user?.email ?? '';
+final userId = user?.uid ?? '';
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -49,11 +49,10 @@ class MyApp extends StatelessWidget {
         '/welcome': (context) => const WelcomePage(),
 
         '/donorHome': (context) {
-          final email =
+  final uid =
               (ModalRoute.of(context)?.settings.arguments as String?) ??
-                  userEmail;
-
-          return DonorHomePage(userEmail: email);
+          userId;
+          return DonorHomePage(userId: uid);
         },
 
            '/beneficiaryHome': (context) {
@@ -79,7 +78,7 @@ class MyApp extends StatelessWidget {
           return DonorMorePage(userEmail: email);
         },
 
-        '/addDonation': (context) => const AddDonationPage(),
+'/addDonation': (context) => AddDonationPage(userId: userId),
 
         // صفحة اختيار طريقة التوصيل
         '/deliveryMethod': (context) {
