@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 
 import 'package:http/http.dart' as http;
 
-
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -15,8 +15,9 @@ import 'app_design.dart';
 
 
 class AddDonationPage extends StatefulWidget {
+final String userId;
 
-  const AddDonationPage({super.key});
+  const AddDonationPage({super.key, required this.userId});
 
 
 
@@ -32,6 +33,7 @@ class _AddDonationPageState extends State<AddDonationPage> {
 bool inputsLocked = false; 
   String? selectedGender;
 String? donationId;
+String? itemCountError;
   Map<String, dynamic>? selectedAgeGroup;
 
   final TextEditingController _itemCountController = TextEditingController();
@@ -71,7 +73,12 @@ final List<Map<String, dynamic>> ageGroups = [
   {'label': 'بالغون (18+)', 'min': 18, 'max': 120},
 
 ];
-
+final List<String> sizeRanges = [
+  "XS - S",
+  "S - M",
+  "M - L",
+  "L - XL",
+];
 String? generalSize;
 
 bool ageNeedsSize() {
@@ -94,72 +101,61 @@ Map<String, String> typeMap = {
   "bag": "حقيبة",
   "hat": "قبعة",
 };
+void _updateItemCount(String value) {
+  setState(() {
+    itemCountError = null;
+  });
 
-  void _updateItemCount(String value) {
-
-    if (value.isEmpty) {
-
-      setState(() {
-
-        totalItems = 0;
-
-        totalBoxes = 0;
-
-        boxes = {};
-
-      });
-
-      return;
-
-    }
-
-    int? parsed = int.tryParse(value);
-
-    if (parsed == null || parsed <= 0) return;
-
-
-
-    totalItems = parsed;
-
-    totalBoxes = (totalItems / 5).ceil();
-
-    boxes = {};
-
-    int remainingItems = totalItems;
-
-
-
-    for (int i = 1; i <= totalBoxes; i++) {
-
-      int itemsInThisBox = remainingItems >= 5 ? 5 : remainingItems;
-
-      boxes[i] = List.generate(
-
-        itemsInThisBox,
-
-        (index) => {
-
-          'image': null,
-
-          'type': null,
-
-          'size': null,
-
-          'isValid': false,
-
-          'error': null,
-
-        },
-
-      );
-
-      remainingItems -= itemsInThisBox;
-
-    }
-
-    setState(() {});
-
+  if (value.isEmpty) {
+    setState(() {
+      totalItems = 0;
+      totalBoxes = 0;
+      boxes = {};
+    });
+    return;
   }
+
+  final parsed = int.tryParse(value);
+
+  if (parsed == null) {
+    setState(() {
+      itemCountError = "الرجاء إدخال أرقام فقط";
+    });
+    return;
+  }
+
+  if (parsed > 100) {
+    setState(() {
+      itemCountError = "الحد الأقصى 100 قطعة";
+    });
+    return;
+  }
+
+  totalItems = parsed;
+  totalBoxes = (totalItems / 5).ceil();
+
+  boxes = {};
+  int remainingItems = totalItems;
+
+  for (int i = 1; i <= totalBoxes; i++) {
+    int itemsInThisBox = remainingItems >= 5 ? 5 : remainingItems;
+
+    boxes[i] = List.generate(
+      itemsInThisBox,
+      (index) => {
+        'image': null,
+        'type': null,
+        'size': null,
+        'isValid': false,
+        'error': null,
+      },
+    );
+
+    remainingItems -= itemsInThisBox;
+  }
+
+  setState(() {});
+}
   
 String generateBoxCode(String boxId, int boxNumber) {
   final shortId = boxId.length >= 5
@@ -408,23 +404,39 @@ bool validateBoxBeforeSave(int box) {
 );
 
   // عرض نافذة التأكيد
-  bool confirm = await showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text("تأكيد الحفظ"),
-      content: const Text("هل أنت متأكد من حفظ هذا الصندوق؟"),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text("إلغاء"),
-        ),
-        ElevatedButton(
-          onPressed: () => Navigator.of(context).pop(true),
-          child: const Text("نعم"),
-        ),
-      ],
+ bool confirm = await showDialog<bool>(
+  context: context,
+  builder: (dialogContext) => AlertDialog(
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(20),
     ),
-  );
+    title: const Text(
+      "تأكيد الحفظ",
+      textAlign: TextAlign.center,
+    ),
+    content: const Text(
+      "هل أنت متأكد من حفظ هذا الصندوق؟",
+      textAlign: TextAlign.center,
+    ),
+    actionsAlignment: MainAxisAlignment.spaceEvenly,
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(dialogContext, false),
+        child: const Text(
+          "إلغاء",
+          style: TextStyle(color: Colors.black),
+        ),
+      ),
+      TextButton(
+        onPressed: () => Navigator.pop(dialogContext, true),
+        child: const Text(
+          "نعم",
+          style: TextStyle(color: Colors.black),
+        ),
+      ),
+    ],
+  ),
+) ?? false;
 
   if (!confirm) return; // إذا ضغط إلغاء ما نسوي شي
 
@@ -479,8 +491,8 @@ await docRef.update({
   'boxCode': boxCode,
 });
 
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text("تم حفظ الصندوق $box ✅")));
+    //ScaffoldMessenger.of(context)
+      //  .showSnackBar(SnackBar(content: Text("تم حفظ الصندوق $box ✅")));
 
     setState(() {
       boxes[box] = List.generate(
@@ -500,54 +512,73 @@ await docRef.update({
 
     return savedBoxes.length == totalBoxes;
 
-  }
-
-
-  /** */
-void _showExitDialog() {
+  }Future<void> _showLogoutDialog() async {
   showDialog(
     context: context,
-    builder: (context) => AlertDialog(
+    builder: (dialogContext) => AlertDialog(
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
       ),
-      title: const Text("تأكيد الخروج"),
+      title: const Text(
+        'الرجوع',
+        textAlign: TextAlign.center,
+      ),
       content: const Text(
-        "هل أنتِ متأكدة من الخروج؟ لن يتم حفظ التبرعات الحالية.",
+        "هل أنتِ متأكدة من الرجوع؟ لن يتم حفظ التبرع الحالي.",
+        textAlign: TextAlign.center,
       ),
+      actionsAlignment: MainAxisAlignment.spaceEvenly,
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text("إلغاء"),
+          onPressed: () => Navigator.pop(dialogContext),
+          child: const Text(
+            'إلغاء',
+            style: TextStyle(color: Colors.black),
+          ),
         ),
 
-        ElevatedButton(
+        TextButton(
           onPressed: () async {
-            Navigator.pop(context);
+            Navigator.pop(dialogContext);
 
-            final user = FirebaseAuth.instance.currentUser;
+          final user = FirebaseAuth.instance.currentUser;
 
-            if (donationId != null) {
-              await FirebaseFirestore.instance
-                  .collection('donations')
-                  .doc(donationId)
-                  .delete();
-            }
+if (donationId != null) {
+  //  حذف كل البوكسات المرتبطة
+  final boxesSnap = await FirebaseFirestore.instance
+      .collection('donation_boxes')
+      .where('donationId', isEqualTo: donationId)
+      .get();
+
+  for (var doc in boxesSnap.docs) {
+    await doc.reference.delete();
+  }
+
+  //  حذف التبرع نفسه
+  await FirebaseFirestore.instance
+      .collection('donations')
+      .doc(donationId)
+      .delete();
+}
+
+            if (!mounted) return;
 
             Navigator.pushNamedAndRemoveUntil(
               context,
               '/donorHome',
               (route) => false,
-              arguments: user?.email ?? '',
+              arguments: user?.uid ?? '',
             );
           },
-          child: const Text("خروج"),
+          child: const Text(
+            'نعم',
+            style: TextStyle(color: Colors.black),
+          ),
         ),
       ],
     ),
   );
 }
-
  @override
 Widget build(BuildContext context) {
   return Directionality(
@@ -559,7 +590,7 @@ Widget build(BuildContext context) {
         title: const Text("إضافة تبرع"),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: _showExitDialog,
+          onPressed: _showLogoutDialog,
         ),
       ),
 
@@ -612,9 +643,13 @@ if (ageNeedsSize()) ...[
       prefixIcon: Icon(Icons.straighten),
     ),
     value: generalSize,
-    items: ["XXXS","XXS","XS","S","M","L","XL","XXL","XXXL"]
-        .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-        .toList(),
+items: sizeRanges
+    .map((e) => DropdownMenuItem(
+          value: e,
+          child: Text(e),
+        ))
+    .toList(),
+    
     onChanged: inputsLocked
         ? null
         : (v) => setState(() => generalSize = v),
@@ -623,15 +658,37 @@ if (ageNeedsSize()) ...[
             AppGap.md,
 
             /// عدد القطع
-            TextField(
-              controller: _itemCountController,
-              keyboardType: TextInputType.number,
-              enabled: !inputsLocked,
-              onChanged: inputsLocked ? null : _updateItemCount,
-              decoration: const InputDecoration(
-                labelText: "إجمالي عدد القطع",
-              ),
-            ),
+          TextField(
+  controller: _itemCountController,
+  keyboardType: TextInputType.number,
+  enabled: !inputsLocked,
+  onChanged: inputsLocked ? null : _updateItemCount,
+  inputFormatters: [
+    FilteringTextInputFormatter.digitsOnly,
+  ],decoration: InputDecoration(
+  labelText: "إجمالي عدد القطع",
+  errorText: itemCountError,
+
+  border: OutlineInputBorder(
+    borderRadius: BorderRadius.circular(12),
+  ),
+
+  focusedBorder: OutlineInputBorder(
+    borderRadius: BorderRadius.circular(12),
+    borderSide: BorderSide(color: Colors.blue),
+  ),
+
+  errorBorder: OutlineInputBorder(
+    borderRadius: BorderRadius.circular(12),
+    borderSide: BorderSide(color: Colors.red),
+  ),
+
+  focusedErrorBorder: OutlineInputBorder(
+    borderRadius: BorderRadius.circular(12),
+    borderSide: BorderSide(color: Colors.red),
+  ),
+),
+),
 
             AppGap.lg,
 
@@ -901,7 +958,7 @@ ElevatedButton(
             context,
             '/donorHome',
             (route) => false,
-            arguments: user?.email ?? '',
+            arguments: user?.uid ?? '',
           );
         }
       : null,
