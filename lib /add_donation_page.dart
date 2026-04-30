@@ -362,6 +362,7 @@ Future<void> createDonationIfNeeded() async {
     'ageGroup': selectedAgeGroup != null
         ? selectedAgeGroup!['label']
         : "",
+        'generalSize': generalSize ?? "",
     'numberOfItems': totalItems,
     'status': 'draft',
     'createdAt': FieldValue.serverTimestamp(),
@@ -940,6 +941,7 @@ ElevatedButton(
             'donorID': user!.uid,
             'gender': selectedGender ?? "",
             'ageGroup': selectedAgeGroup?['label'] ?? "",
+            'generalSize': generalSize ?? "",
             'numberOfItems': totalItems,
             'status': 'draft',
           });
