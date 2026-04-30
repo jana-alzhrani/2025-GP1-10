@@ -4,11 +4,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'app_design.dart';
 
 class DonorMorePage extends StatefulWidget {
-  final String userEmail;
+  final String userId;
 
   const DonorMorePage({
     super.key,
-    required this.userEmail,
+    required this.userId,
   });
 
   @override
@@ -33,19 +33,9 @@ class _DonorMorePageState extends State<DonorMorePage> {
 
   Future<void> _loadUserData() async {
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
-
-      if (currentUser == null) {
-        setState(() {
-          email = widget.userEmail;
-          isLoading = false;
-        });
-        return;
-      }
-
       final userDoc = await FirebaseFirestore.instance
           .collection('Users')
-          .doc(currentUser.uid)
+          .doc(widget.userId)
           .get();
 
       if (userDoc.exists) {
@@ -55,17 +45,18 @@ class _DonorMorePageState extends State<DonorMorePage> {
           firstName = (data['firstName'] ?? '').toString().trim();
           lastName = (data['lastName'] ?? '').toString().trim();
           phone = (data['phone'] ?? '').toString().trim();
-          email = (data['email'] ?? currentUser.email ?? widget.userEmail)
-              .toString()
-              .trim();
+          email = (data['email'] ?? '').toString().trim();
 
+          isLoading = false;
+        });
+      } else {
+        setState(() {
           isLoading = false;
         });
       }
     } catch (e) {
       debugPrint('Error: $e');
       setState(() {
-        email = widget.userEmail;
         isLoading = false;
       });
     }
@@ -268,13 +259,13 @@ class _DonorMorePageState extends State<DonorMorePage> {
           Navigator.pushReplacementNamed(
             context,
             '/donorHome',
-            arguments: widget.userEmail,
+            arguments: widget.userId,
           );
         } else if (index == 1) {
           Navigator.pushReplacementNamed(
             context,
             '/viewDonation',
-            arguments: widget.userEmail,
+            arguments: widget.userId,
           );
         }
       },
