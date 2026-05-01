@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-
+import 'package:firebase_auth/firebase_auth.dart';
 import 'app_design.dart';
 
 class DeliveryMethodPage extends StatefulWidget {
@@ -400,6 +400,8 @@ class _DeliveryMethodPageState extends State<DeliveryMethodPage> {
         context,
         '/viewDonation',
         (route) => false,
+          arguments: FirebaseAuth.instance.currentUser?.uid ?? '',
+
       );
     } catch (e) {
       _showMessage('فشل الحفظ: $e');
