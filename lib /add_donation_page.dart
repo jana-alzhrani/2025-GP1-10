@@ -58,21 +58,20 @@ String? itemCountError;
   
 
 
-final List<Map<String, dynamic>> ageGroups = [
 
+  final List<Map<String, dynamic>> ageGroups = [
   {'label': 'رضّع (0-2)', 'min': 0, 'max': 2},
 
   {'label': 'أطفال صغار (3-5)', 'min': 3, 'max': 5},
 
   {'label': 'أطفال (6-9)', 'min': 6, 'max': 9},
 
-  {'label': 'أطفال  (10-12)', 'min': 10, 'max': 12},
+  {'label': 'أطفال (10-15)', 'min': 10, 'max': 15},
 
-  {'label': 'مراهقون (13-17)', 'min': 13, 'max': 17},
-
-  {'label': 'بالغون (18+)', 'min': 18, 'max': 120},
-
+  {'label': 'بالغون', 'min': 16, 'max': 120},
 ];
+
+
 final List<String> sizeRanges = [
   "XS - S",
   "S - M",
@@ -83,7 +82,8 @@ String? generalSize;
 
 bool ageNeedsSize() {
   if (selectedAgeGroup == null) return false;
-  return selectedAgeGroup!['min'] >= 13;
+
+  return selectedAgeGroup!['label'] == 'بالغون';
 }
 
   bool needsSize(String? type) {
@@ -124,9 +124,13 @@ void _updateItemCount(String value) {
     return;
   }
 
+  // 🔴 الحد الأقصى
   if (parsed > 100) {
     setState(() {
       itemCountError = "الحد الأقصى 100 قطعة";
+      totalItems = 0;
+      totalBoxes = 0;
+      boxes = {}; // 🚫 يمنع إنشاء أي بوكسات
     });
     return;
   }
