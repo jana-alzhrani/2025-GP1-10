@@ -399,6 +399,49 @@ class AppDesign {
       ),
     ),
   );
+
+  static Future<bool> showAppDialog({
+  required BuildContext context,
+  required String title,
+  required String message,
+}) async {
+  return await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            title,
+            textAlign: TextAlign.center,
+          ),
+          content: Text(
+            message,
+            textAlign: TextAlign.center,
+          ),
+          actionsAlignment: MainAxisAlignment.spaceEvenly,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('إلغاء'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text(
+                'نعم',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700, // بولد
+                ),
+              ),
+            ),
+          ],
+        ),
+      ) ??
+      false;
+}
+
+
+
 }
 
 // =========================
@@ -462,3 +505,6 @@ class AppSizes {
   static const double iconMedium = AppDesign.iconMD;
   static const double iconLarge = AppDesign.iconLG;
 }
+
+
+  
