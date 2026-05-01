@@ -74,9 +74,24 @@ class _BeneficiaryViewDonationPageState
           _parseInt(a['boxNumber']).compareTo(_parseInt(b['boxNumber'])),
     );
 
+    final List<Map<String, dynamic>> allItems = [];
+
+    for (final box in boxes) {
+  final items = box['items'];
+
+  if (items is List) {
+    for (final item in items) {
+      if (item is Map) {
+        allItems.add(Map<String, dynamic>.from(item));
+      }
+    }
+  }
+}
+
     return {
       'donation': donationData,
       'boxes': boxes,
+      'allItems': allItems,
     };
   }
 
@@ -167,168 +182,109 @@ class _BeneficiaryViewDonationPageState
     );
   }
 
-Widget _buildItemCard(Map<String, dynamic> item, int itemIndex) {
-  final imageBytes = _decodeImage(item['imageBase64']?.toString());
-  final type = (item['type'] ?? 'غير محدد').toString();
-  final size = (item['size'] ?? '').toString();
-
-  return Container(
-    margin: const EdgeInsets.only(bottom: AppDesign.spaceLG),
-    child: Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(
-            AppDesign.spaceMD,
-            AppDesign.spaceLG,
-            AppDesign.spaceMD,
-            AppDesign.spaceMD,
-          ),
-          decoration: BoxDecoration(
-            color: AppDesign.white,
-            borderRadius: BorderRadius.circular(AppDesign.radiusLG),
-            border: Border.all(color: AppDesign.border),
-          ),
-          child: Row(
-            textDirection: TextDirection.rtl,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-             GestureDetector(
-  onTap: imageBytes == null ? null : () => _showImagePreview(imageBytes),
-  child: Container(
-    width: 88,
-    height: 88,
-    decoration: BoxDecoration(
-      color: AppDesign.surfaceAlt,
-      borderRadius: BorderRadius.circular(AppDesign.radiusMD),
-      border: Border.all(color: AppDesign.border),
-    ),
-    child: imageBytes != null
-        ? ClipRRect(
-            borderRadius: BorderRadius.circular(AppDesign.radiusMD),
-            child: Image.memory(
-              imageBytes,
-              fit: BoxFit.cover,
-            ),
-          )
-        : const Icon(
-            Icons.image_not_supported_outlined,
-            color: AppDesign.secondary,
-            size: 30,
-          ),
-  ),
-),const SizedBox(width: 10),
-
-              Flexible(
-                child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'النوع: $type',
-                      textAlign: TextAlign.right,
-                      style: AppDesign.bodyStyle.copyWith(
-                        color: AppDesign.textPrimary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    if (size.trim().isNotEmpty) ...[
-                      const SizedBox(height: AppDesign.spaceXS),
-                      Text(
-                        'المقاس: $size',
-                        textAlign: TextAlign.right,
-                        style: AppDesign.bodySecondaryStyle,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        Positioned(
-          top: -10,
-          right: 22,
-          child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppDesign.spaceMD,
-              vertical: 2,
-            ),
-            color: AppDesign.background,
-            child: Text(
-              'القطعة ${itemIndex + 1}',
-              style: AppDesign.subtitleStyle.copyWith(
-                fontWeight: FontWeight.w800,
-                color: AppDesign.textPrimary,
-              ),
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-  Widget _buildBoxCard(Map<String, dynamic> box) {
-    final boxNumber = _parseInt(box['boxNumber']);
-    final items = List<Map<String, dynamic>>.from(box['items'] ?? []);
+  Widget _buildItemCard(Map<String, dynamic> item, int itemIndex) {
+    final imageBytes = _decodeImage(item['imageBase64']?.toString());
+    final type = (item['type'] ?? 'غير محدد').toString();
+    final size = (item['size'] ?? '').toString();
 
     return Container(
       margin: const EdgeInsets.only(bottom: AppDesign.spaceLG),
-      padding: const EdgeInsets.all(AppDesign.cardPadding),
-      decoration: AppDesign.primaryCardDecoration,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
+      child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          Row(
-            textDirection: TextDirection.rtl,
-            children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  color: AppDesign.surfaceAlt,
-                  borderRadius: BorderRadius.circular(AppDesign.radiusMD),
-                  border: Border.all(color: AppDesign.border),
-                ),
-                child: const Icon(
-                  Icons.inventory_2_outlined,
-                  color: AppDesign.primary,
-                ),
-              ),
-              const SizedBox(width: AppDesign.spaceSM),
-              Expanded(
-                child: Text(
-                  'الصندوق $boxNumber',
-                  textAlign: TextAlign.right,
-                  style: AppDesign.subtitleStyle.copyWith(
-                    fontWeight: FontWeight.w700,
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(
+              AppDesign.spaceMD,
+              AppDesign.spaceLG,
+              AppDesign.spaceMD,
+              AppDesign.spaceMD,
+            ),
+            decoration: BoxDecoration(
+              color: AppDesign.white,
+              borderRadius: BorderRadius.circular(AppDesign.radiusLG),
+              border: Border.all(color: AppDesign.border),
+            ),
+            child: Row(
+              textDirection: TextDirection.rtl,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                GestureDetector(
+                  onTap:
+                      imageBytes == null ? null : () => _showImagePreview(imageBytes),
+                  child: Container(
+                    width: 88,
+                    height: 88,
+                    decoration: BoxDecoration(
+                      color: AppDesign.surfaceAlt,
+                      borderRadius: BorderRadius.circular(AppDesign.radiusMD),
+                      border: Border.all(color: AppDesign.border),
+                    ),
+                    child: imageBytes != null
+                        ? ClipRRect(
+                            borderRadius:
+                                BorderRadius.circular(AppDesign.radiusMD),
+                            child: Image.memory(
+                              imageBytes,
+                              fit: BoxFit.cover,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.image_not_supported_outlined,
+                            color: AppDesign.secondary,
+                            size: 30,
+                          ),
                   ),
                 ),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'النوع: $type',
+                        textAlign: TextAlign.right,
+                        style: AppDesign.bodyStyle.copyWith(
+                          color: AppDesign.textPrimary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (type == 'حذاء' && size.trim().isNotEmpty)
+                        Text(
+                          'مقاس الحذاء: $size',
+                          textAlign: TextAlign.right,
+                          style: AppDesign.bodySecondaryStyle,
+                        )
+                      else if (size.trim().isNotEmpty)
+                        Text(
+                          'المقاس: $size',
+                          textAlign: TextAlign.right,
+                          style: AppDesign.bodySecondaryStyle,
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Positioned(
+            top: -10,
+            right: 22,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDesign.spaceMD,
+                vertical: 2,
               ),
-            ],
-          ),
-          const SizedBox(height: AppDesign.spaceMD),
-          Center(
-          child: Text(
-            'محتويات الصندوق',
-            textAlign: TextAlign.center,
-            style: AppDesign.bodySecondaryStyle.copyWith(
-              fontWeight: FontWeight.w600,
+              color: AppDesign.background,
+              child: Text(
+                'القطعة ${itemIndex + 1}',
+                style: AppDesign.subtitleStyle.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: AppDesign.textPrimary,
+                ),
+              ),
             ),
           ),
-        ),
-          const SizedBox(height: AppDesign.spaceMD),
-          if (items.isEmpty)
-            Text(
-              'لا توجد عناصر داخل هذا الصندوق',
-              style: AppDesign.bodyStyle,
-            )
-          else
-            ...List.generate(
-              items.length,
-              (index) => _buildItemCard(items[index], index),
-            ),
         ],
       ),
     );
@@ -392,7 +348,8 @@ Widget _buildItemCard(Map<String, dynamic> item, int itemIndex) {
 
             final donationData =
                 snapshot.data!['donation'] as Map<String, dynamic>;
-            final boxes = snapshot.data!['boxes'] as List;
+            final allItems =
+                snapshot.data!['allItems'] as List<Map<String, dynamic>>;
 
             final gender = (donationData['gender'] ?? '-').toString();
             final ageGroup = (donationData['ageGroup'] ?? '-').toString();
@@ -409,36 +366,31 @@ Widget _buildItemCard(Map<String, dynamic> item, int itemIndex) {
                       children: [
                         Container(
                           width: double.infinity,
-                          padding:
-                              const EdgeInsets.all(AppDesign.cardPadding),
+                          padding: const EdgeInsets.all(AppDesign.cardPadding),
                           decoration: AppDesign.primaryCardDecoration,
-                          child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,                            children: [
-                              Text(
-                                'تبرع ($gender - $ageGroup)',
-                                textAlign: TextAlign.left,
-                                style: AppDesign.h2Style.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              const SizedBox(height: AppDesign.spaceMD),
-                              Directionality(
-                                textDirection: TextDirection.rtl,
-                                child: Wrap(
-                                  spacing: AppDesign.spaceSM,
-                                  runSpacing: AppDesign.spaceSM,
-                                  alignment: WrapAlignment.start,
-                                  children: [
-                                    _chip(Icons.wc_outlined, gender),
-                                    _chip(Icons.cake_outlined, ageGroup),
-                                    if (generalSize.trim().isNotEmpty)
-                                      _chip(Icons.straighten, generalSize),
-                                    _chip(Icons.inventory_2_outlined, '$numberOfItems قطع'),
-                                    _chip(Icons.widgets_outlined, '${boxes.length} صناديق'),
-                                  ],
-                                ),
-                              ),
-                            ],
+                          child: Directionality(
+                            textDirection: TextDirection.rtl,
+                            child: Wrap(
+                              spacing: AppDesign.spaceSM,
+                              runSpacing: AppDesign.spaceSM,
+                              alignment: WrapAlignment.start,
+                              children: [
+                                 _chip(Icons.wc_outlined, gender),
+
+                                if (ageGroup.contains('مراهقون') || ageGroup.contains('بالغون'))
+                                  if (generalSize.trim().isNotEmpty)
+                                    _chip(Icons.straighten, generalSize)
+                                  else
+                                    _chip(Icons.cake_outlined, ageGroup)
+                                else
+                                  _chip(Icons.cake_outlined, ageGroup),
+
+                                  _chip(
+                                    Icons.inventory_2_outlined,
+                                    '$numberOfItems قطع',
+                                  ),
+                                ],
+                            ),
                           ),
                         ),
                         const SizedBox(height: AppDesign.spaceXL),
@@ -454,14 +406,14 @@ Widget _buildItemCard(Map<String, dynamic> item, int itemIndex) {
                           ),
                         ),
                         const SizedBox(height: AppDesign.spaceMD),
-                        if (boxes.isEmpty)
+                        if (allItems.isEmpty)
                           Container(
                             width: double.infinity,
                             padding:
                                 const EdgeInsets.all(AppDesign.cardPadding),
                             decoration: AppDesign.primaryCardDecoration,
                             child: Text(
-                              'لا توجد صناديق مرتبطة بهذا التبرع حالياً',
+                              'لا توجد قطع مرتبطة بهذا التبرع حالياً',
                               textAlign: TextAlign.center,
                               style: AppDesign.bodyStyle.copyWith(
                                 color: AppDesign.textSecondary,
@@ -469,10 +421,9 @@ Widget _buildItemCard(Map<String, dynamic> item, int itemIndex) {
                             ),
                           )
                         else
-                          ...boxes.map(
-                            (box) => _buildBoxCard(
-                              Map<String, dynamic>.from(box),
-                            ),
+                          ...List.generate(
+                            allItems.length,
+                            (index) => _buildItemCard(allItems[index], index),
                           ),
                         const SizedBox(height: AppDesign.space2XL),
                       ],
@@ -522,58 +473,57 @@ Widget _buildItemCard(Map<String, dynamic> item, int itemIndex) {
     );
   }
 
-void _showImagePreview(Uint8List imageBytes) {
-  final size = MediaQuery.of(context).size.width * 0.75;
+  void _showImagePreview(Uint8List imageBytes) {
+    final size = MediaQuery.of(context).size.width * 0.75;
 
-  showDialog(
-    context: context,
-    barrierColor: Colors.black.withOpacity(0.4),
-    builder: (_) {
-      return Center(
-        child: Material(
-          color: Colors.transparent,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Container(
-                width: size,
-                height: size,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(22),
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.4),
+      builder: (_) {
+        return Center(
+          child: Material(
+            color: Colors.transparent,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: size,
+                  height: size,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(22),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Image.memory(
+                    imageBytes,
+                    fit: BoxFit.cover,
+                  ),
                 ),
-                clipBehavior: Clip.antiAlias,
-                child: Image.memory(
-                  imageBytes,
-                  fit: BoxFit.cover,
-                ),
-              ),
-
-              Positioned(
-                top: 8,
-                left: 8,
-                child: GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: Container(
-                    width: 34,
-                    height: 34,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.black,
-                    ),
-                    child: const Icon(
-                      Icons.close,
-                      color: Colors.white,
-                      size: 22,
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 34,
+                      height: 34,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.black,
+                      ),
+                      child: const Icon(
+                        Icons.close,
+                        color: Colors.white,
+                        size: 22,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      );
-    },
-  );
-}
+        );
+      },
+    );
+  }
 }
