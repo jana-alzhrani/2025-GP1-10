@@ -7,11 +7,11 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 class ViewDonationPage extends StatefulWidget {
-  final String userEmail;
+  final String userId;
 
   const ViewDonationPage({
     super.key,
-    required this.userEmail,
+    required this.userId,
   });
 
   @override
@@ -27,6 +27,12 @@ class _ViewDonationPageState extends State<ViewDonationPage>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   bool _isDraftStatus(String status) {
@@ -50,13 +56,15 @@ class _ViewDonationPageState extends State<ViewDonationPage>
     }
   }
 
-  String _formatDate(dynamic createdAt) {
-    if (createdAt == null) return 'غير محدد';
-    if (createdAt is Timestamp) {
-      final date = createdAt.toDate();
-      return '${date.day}/${date.month}/${date.year}';
+  String _formatDeliveryMethod(String method) {
+    switch (method.toLowerCase()) {
+      case 'pickup':
+        return 'استلام من موقعي';
+      case 'self_delivery':
+        return 'توصيل ذاتي للمستودع';
+      default:
+        return 'غير محددة';
     }
-    return 'غير محدد';
   }
 
   Color _statusBackground(String status) {
@@ -121,34 +129,58 @@ class _ViewDonationPageState extends State<ViewDonationPage>
     );
   }
 
-  Future<void> _deleteDonation(String docId) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('حذف التبرع'),
-        content: const Text(
-          'هل أنت متأكد من حذف هذا التبرع؟ سيتم حذف جميع الصناديق المرتبطة به أيضًا.',
+  Widget _deliveryChip(String method) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppDesign.primary,
+            AppDesign.primary.withOpacity(0.7),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('إلغاء'),
+        borderRadius: BorderRadius.circular(25),
+        boxShadow: [
+          BoxShadow(
+            color: AppDesign.primary.withOpacity(0.25),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppDesign.error,
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.local_shipping_outlined,
+            color: Colors.white,
+            size: 18,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            'طريقة التوصيل: $method',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
             ),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('حذف'),
           ),
         ],
       ),
     );
+  }
 
+  Future<void> _deleteDonation(String docId) async {
+ final confirm = await AppDesign.showAppDialog(
+  context: context,
+  title: 'حذف التبرع',
+  message: 'هل أنت متأكد من حذف هذا التبرع؟',
+);
     if (confirm != true) return;
 
     try {
       final currentUser = FirebaseAuth.instance.currentUser;
+
       if (currentUser == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('يجب تسجيل الدخول أولاً')),
@@ -193,11 +225,13 @@ class _ViewDonationPageState extends State<ViewDonationPage>
           .delete();
 
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('تم حذف التبرع بنجاح')),
       );
     } catch (e) {
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('فشل حذف التبرع: $e')),
       );
@@ -205,26 +239,11 @@ class _ViewDonationPageState extends State<ViewDonationPage>
   }
 
   Future<void> _moveDraftToConfirmed(String docId) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('تأكيد التبرع'),
-        content: const Text(
-          'هل أنت متأكد من اعتماد هذا التبرع؟ لن تتمكن من تعديله أو حذفه بعد اختيار طريقة التوصيل.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('إلغاء'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('تأكيد'),
-          ),
-        ],
-      ),
-    );
-
+   final confirm = await AppDesign.showAppDialog(
+  context: context,
+  title: 'تأكيد التبرع',
+  message: 'هل تريد اعتماد هذا التبرع؟',
+);
     if (confirm != true) return;
 
     if (!mounted) return;
@@ -272,17 +291,17 @@ class _ViewDonationPageState extends State<ViewDonationPage>
                   boxCode,
                   style: pw.TextStyle(fontSize: 42),
                 ),
-                  pw.SizedBox(height: 10),
-                  pw.Text("ID: $boxId"),
-                ],
-              ),
-            );
-          },
-        ),
-      );
+                pw.SizedBox(height: 10),
+                pw.Text("ID: $boxId"),
+              ],
+            ),
+          );
+        },
+      ),
+    );
 
-      await Printing.layoutPdf(
-        onLayout: (format) async => pdf.save(),
+    await Printing.layoutPdf(
+      onLayout: (format) async => pdf.save(),
     );
   }
 
@@ -293,7 +312,9 @@ class _ViewDonationPageState extends State<ViewDonationPage>
     final String ageGroup = (data['ageGroup'] ?? '-').toString();
     final int numberOfItems = (data['numberOfItems'] ?? 0) as int;
     final String status = (data['status'] ?? '-').toString();
-    final dynamic createdAt = data['createdAt'];
+    final String deliveryMethod =
+        (data['deliveryMethod'] ?? data['deliveryType'] ?? 'غير محدد')
+            .toString();
 
     final bool isDraft = _isDraftStatus(status);
 
@@ -354,94 +375,9 @@ class _ViewDonationPageState extends State<ViewDonationPage>
               ),
             ],
           ),
+
           const SizedBox(height: AppDesign.spaceLG),
-          StreamBuilder<QuerySnapshot>(
-  stream: FirebaseFirestore.instance
-      .collection('donation_boxes')
-      .where('donationId', isEqualTo: doc.id)
-      .snapshots(),
-  builder: (context, snapshot) {
-    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-      return Text(
-        "لا توجد صناديق",
-        style: AppDesign.captionStyle,
-      );
-    }
 
-    final boxes = snapshot.data!.docs;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        AppGap.sm,
-
-        Text(
-          "الصناديق",
-          style: AppDesign.subtitleStyle.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-
-        AppGap.sm,
-
-        ...boxes.map((box) {
-final data = box.data() as Map<String, dynamic>;
-final boxCode = data['boxCode'] ?? '---';
-final boxId = box.id;
-final donationId = data['donationId'] ?? '';
-          return Container(
-            margin: const EdgeInsets.only(bottom: AppDesign.spaceSM),
-            padding: const EdgeInsets.all(AppDesign.cardPadding),
-            decoration: AppDesign.softCardDecoration,
-            child: Row(
-              children: [
-
-                // زر الطباعة
-                Container(
-                  decoration: BoxDecoration(
-                    color: AppDesign.primary.withOpacity(0.08),
-                    borderRadius:
-                        BorderRadius.circular(AppDesign.radiusMD),
-                  ),
-                  child: IconButton(
-                    icon: const Icon(Icons.print),
-                    color: AppDesign.primary,
-                    onPressed: () {
-                      printBoxLabel(boxCode,  donationId);
-                    },
-                  ),
-                ),
-
-                AppGap.wMD,
-
-                // النص
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        boxCode,
-                        style: AppDesign.h2Style.copyWith(
-                          color: AppDesign.primary,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      AppGap.xs,
-                      Text(
-                        "ID: $donationId",
-                        style: AppDesign.captionStyle,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          );
-        }).toList(),
-      ],
-    );
-  },
-),
           Align(
             alignment: Alignment.centerRight,
             child: Directionality(
@@ -455,69 +391,152 @@ final donationId = data['donationId'] ?? '';
                   _chip(Icons.wc_outlined, gender),
                   _chip(Icons.cake_outlined, ageGroup),
                   _chip(Icons.inventory_2_outlined, '$numberOfItems قطع'),
-                  _chip(Icons.calendar_today_outlined, _formatDate(createdAt)),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: AppDesign.spaceSM),
-          Row(
-            children: isDraft
-                ? [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _openEditDonation(doc),
-                        icon: const Icon(Icons.edit_outlined),
-                        label: const Text('تعديل'),
-                      ),
+
+          if (!isDraft) ...[
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerRight,
+              child: _deliveryChip(_formatDeliveryMethod(deliveryMethod)),
+            ),
+            const SizedBox(height: AppDesign.spaceLG),
+            StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('donation_boxes')
+                  .where('donationId', isEqualTo: doc.id)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      "لا توجد صناديق",
+                      textAlign: TextAlign.right,
+                      style: AppDesign.captionStyle,
                     ),
-                    const SizedBox(width: AppDesign.spaceSM),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _deleteDonation(doc.id),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppDesign.error,
-                          side: const BorderSide(color: AppDesign.error),
+                  );
+                }
+
+                final boxes = snapshot.data!.docs;
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        "الصناديق",
+                        textAlign: TextAlign.right,
+                        style: AppDesign.subtitleStyle.copyWith(
+                          fontWeight: FontWeight.w700,
                         ),
-                        icon: const Icon(Icons.delete_outline),
-                        label: const Text('حذف'),
                       ),
                     ),
-                    const SizedBox(width: AppDesign.spaceSM),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () => _moveDraftToConfirmed(doc.id),
-                        icon: const Icon(Icons.check),
-                        label: const Text('تأكيد'),
-                      ),
+                    AppGap.sm,
+                    ...boxes.map((box) {
+                      final boxData = box.data() as Map<String, dynamic>;
+                      final boxCode = boxData['boxCode'] ?? '---';
+                      final donationId = boxData['donationId'] ?? '';
+
+                      return Container(
+                        margin:
+                            const EdgeInsets.only(bottom: AppDesign.spaceSM),
+                        padding: const EdgeInsets.all(AppDesign.cardPadding),
+                        decoration: AppDesign.softCardDecoration,
+                        child: Row(
+                          children: [
+                            Container(
+                              decoration: BoxDecoration(
+                                color: AppDesign.primary.withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(
+                                  AppDesign.radiusMD,
+                                ),
+                              ),
+                              child: IconButton(
+                                icon: const Icon(Icons.print),
+                                color: AppDesign.primary,
+                                onPressed: () {
+                                  printBoxLabel(boxCode, donationId);
+                                },
+                              ),
+                            ),
+                            AppGap.wMD,
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    boxCode,
+                                    style: AppDesign.h2Style.copyWith(
+                                      color: AppDesign.primary,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  AppGap.xs,
+                                  Text(
+                                    "ID: $donationId",
+                                    style: AppDesign.captionStyle,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ],
+                );
+              },
+            ),
+          ],
+
+          const SizedBox(height: AppDesign.spaceSM),
+
+          if (isDraft)
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _openEditDonation(doc),
+                    icon: const Icon(Icons.edit_outlined),
+                    label: const Text('تعديل'),
+                  ),
+                ),
+                const SizedBox(width: AppDesign.spaceSM),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _deleteDonation(doc.id),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppDesign.error,
+                      side: const BorderSide(color: AppDesign.error),
                     ),
-                  ]
-                : [],
-          ),
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('حذف'),
+                  ),
+                ),
+                const SizedBox(width: AppDesign.spaceSM),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => _moveDraftToConfirmed(doc.id),
+                    icon: const Icon(Icons.check),
+                    label: const Text('تأكيد'),
+                  ),
+                ),
+              ],
+            ),
         ],
       ),
     );
   }
 
   Widget _buildDonationsList(bool draftsOnly) {
-    final currentUser = FirebaseAuth.instance.currentUser;
-
-    if (currentUser == null) {
-      return Center(
-        child: Text(
-          'يجب تسجيل الدخول أولاً',
-          style: AppDesign.bodyStyle.copyWith(
-            color: AppDesign.primary,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      );
-    }
-
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('donations')
-          .where('donorID', isEqualTo: currentUser.uid)
+          .where('donorID', isEqualTo: widget.userId)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -609,13 +628,13 @@ final donationId = data['donationId'] ?? '';
             Navigator.pushReplacementNamed(
               context,
               '/donorHome',
-              arguments: widget.userEmail,
+              arguments: widget.userId,
             );
           } else if (index == 2) {
             Navigator.pushReplacementNamed(
               context,
               '/donorMore',
-              arguments: widget.userEmail,
+              arguments: widget.userId,
             );
           }
         },
