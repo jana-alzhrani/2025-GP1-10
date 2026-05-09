@@ -1,17 +1,19 @@
-# madad_app
+# 2025-GP1-10 MADAD 
+# 1.project overview
+Madad is an application that connects donors with verified beneficiaries. Donors can list 
+clothing items they wish to donate along with clear and detailed information for each item, and 
+beneficiaries can browse available clothing items and submit requests according to their needs 
+through a structured and clearly defined process.
+The objective of Madad is to facilitate the organized and fair distribution of donated clothing 
+within the community in Saudi Arabia through a supervised mobile platform that connects 
+donors with eligible beneficiaries. 
 
-A new Flutter project.
+# 2.Repository Structure
+GP-Madad/ │ ├── Release-1/ # First full release (application prototype) │ ├── Release-2/ # Final release ├── Madad_Application/ # Final application │ ├── README.md # Project documentation ├── AUTHORS.md # Contributors ├── .gitignore └── .gitattributes
+# 3. Technologies Used
+Frontend: Flutter (Dart) Material Design Firebase SDK
 
-## Getting Started
+Backend & Database: Firebase Firestore Firebase Authentication
 
-This project is a starting point for a Flutter application.
+Other Tools: GitHub Git Bash jira 
 
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
