@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "1066829548492",
+    "firebase_url": "https://madad-b4ef3-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "madad-b4ef3",
+    "storage_bucket": "madad-b4ef3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1066829548492:android:904ed25dd712257c0bab69",
+        "android_client_info": {
+          "package_name": "com.example.madad_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCpzGv_cUkCMVy_VHCxn8hUzMtsDBRUOgE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

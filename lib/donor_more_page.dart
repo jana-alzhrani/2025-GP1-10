@@ -1,0 +1,591 @@
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'app_design.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+class DonorMorePage extends StatefulWidget {
+  final String userId;
+
+  const DonorMorePage({
+    super.key,
+    required this.userId,
+  });
+
+  @override
+  State<DonorMorePage> createState() => _DonorMorePageState();
+}
+
+class _DonorMorePageState extends State<DonorMorePage> {
+  int _bottomNavIndex = 2;
+
+  String firstName = '';
+  String lastName = '';
+  String phone = '';
+  String email = '';
+
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('Users')
+          .doc(widget.userId)
+          .get();
+
+      if (!mounted) return;
+
+      final data = userDoc.data() ?? {};
+
+      setState(() {
+        firstName = (data['firstName'] ?? '').toString().trim();
+        lastName = (data['lastName'] ?? '').toString().trim();
+        phone = (data['phone'] ?? '').toString().trim();
+        email = (data['email'] ?? '').toString().trim();
+        isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading user data: $e');
+      if (!mounted) return;
+      setState(() => isLoading = false);
+    }
+  }
+
+  Future<void> _showLogoutDialog() async {
+  final confirm = await AppDesign.showAppDialog(
+    context: context,
+    title: 'تسجيل الخروج',
+    message: 'هل أنت متأكد من تسجيل الخروج؟',
+    confirmText: 'تسجيل الخروج',
+    cancelText: 'إلغاء',
+  );
+
+  if (!confirm) return;
+
+  await FirebaseAuth.instance.signOut();
+
+  if (!mounted) return;
+
+  Navigator.pushNamedAndRemoveUntil(
+    context,
+    '/',
+    (route) => false,
+  );
+}
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: AppDesign.background,
+        body: SafeArea(
+          child: isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: Column(
+                    children: [
+                      _buildHeader(),
+                      Padding(
+                        padding: AppPadding.screen.copyWith(
+                          top: 18,
+                          bottom: 18,
+                        ),
+                        child: Column(
+                          children: [
+                            _buildPersonalCard(),
+                            const SizedBox(height: 26),
+                            _buildDivider(),
+                            const SizedBox(height: 24),
+                            _buildAboutMadadCard(),
+                            const SizedBox(height: 26),
+                            _buildLogoutButton(),
+                            const SizedBox(height: 18),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+        ),
+        bottomNavigationBar: _buildBottomNavigationBar(),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return SizedBox(
+      width: double.infinity,
+      height: 150,
+      child: Image.asset(
+        'assets/images/madad_identity.png',
+        fit: BoxFit.cover,
+      ),
+    );
+  }
+
+  Widget _buildPersonalCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(18, 22, 18, 20),
+      decoration: _cardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'البيانات الشخصية',
+            textAlign: TextAlign.right,
+            style: AppDesign.h1Style.copyWith(
+              color: AppDesign.primary,
+              fontSize: 25,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 22),
+          _buildInfoField(
+            label: 'الاسم الأول',
+            value: firstName,
+            icon: Icons.person_outline_rounded,
+          ),
+          const SizedBox(height: 16),
+          _buildInfoField(
+            label: 'الاسم الأخير',
+            value: lastName,
+            icon: Icons.person_outline_rounded,
+          ),
+          const SizedBox(height: 16),
+          _buildInfoField(
+            label: 'رقم الجوال',
+            value: phone,
+            icon: Icons.phone_outlined,
+          ),
+          const SizedBox(height: 16),
+          _buildInfoField(
+            label: 'البريد الإلكتروني',
+            value: email,
+            icon: Icons.email_outlined,
+          ),
+          const SizedBox(height: 22),
+          SizedBox(
+            height: AppDesign.buttonHeightMD,
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: null,
+              style: ElevatedButton.styleFrom(
+                disabledBackgroundColor: const Color(0xFFE2E4E6),
+                disabledForegroundColor: const Color(0xFF7E858A),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppDesign.radiusLG),
+                ),
+              ),
+              child: const Text(
+                'تعديل',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoField({
+    required String label,
+    required String value,
+    required IconData icon,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start, // لضمان بقاء العنوان يمين
+      children: [
+        Text(
+          label,
+          textAlign: TextAlign.right,
+          style: AppDesign.bodyStyle.copyWith(
+            color: AppDesign.textPrimary,
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          height: AppDesign.inputHeight,
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: AppDesign.white,
+            borderRadius: BorderRadius.circular(AppDesign.radiusLG),
+            border: Border.all(color: AppDesign.border),
+          ),
+          child: Row(
+            children: [
+              // وضعنا الـ Expanded أولاً ليكون النص يمين، ثم الأيقونة يساره (برمجياً)
+              // وبسبب الـ Directionality RTL سيظهر النص يميناً والأيقونة يساره بصرياً
+              Expanded(
+                child: Text(
+                  value.isEmpty ? '-' : value,
+                  textAlign: TextAlign.right,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppDesign.subtitleStyle.copyWith(
+                    color: AppDesign.primary,
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Icon(icon, color: AppDesign.primary, size: 22),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDivider() {
+    return Row(
+      children: [
+        Expanded(
+          child: Divider(
+            color: AppDesign.primary.withOpacity(0.35),
+            thickness: 1.1,
+            endIndent: 12,
+          ),
+        ),
+        Icon(
+          Icons.local_florist_outlined,
+          color: AppDesign.primary,
+          size: 30,
+        ),
+        Expanded(
+          child: Divider(
+            color: AppDesign.primary.withOpacity(0.35),
+            thickness: 1.1,
+            indent: 12,
+          ),
+        ),
+      ],
+    );
+  }
+
+Widget _buildAboutMadadCard() {
+  return Container(
+    width: double.infinity,
+    padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
+    decoration: _cardDecoration(),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+
+        // ===== عنوان حول مدد =====
+        Row(
+          textDirection: TextDirection.rtl,
+          children: [
+            _circleIcon(Icons.info_outline_rounded),
+            const SizedBox(width: 12),
+
+            Text(
+              'حول مدد',
+              style: AppDesign.h1Style.copyWith(
+                color: AppDesign.primary,
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 18),
+
+        Divider(
+          color: AppDesign.border,
+          thickness: 1,
+        ),
+
+        const SizedBox(height: 20),
+
+        // ===== موقع المستودع =====
+        Row(
+          textDirection: TextDirection.rtl,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+
+            // أيقونة يمين
+            _circleIcon(Icons.storefront_outlined),
+
+            const SizedBox(width: 14),
+
+            // النص
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      'موقع المستودع',
+                      textAlign: TextAlign.right,
+                      style: AppDesign.subtitleStyle.copyWith(
+                        color: AppDesign.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 4),
+
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      'مستودع مدد - واجهة الرياض',
+                      textAlign: TextAlign.right,
+                      style: AppDesign.bodyStyle.copyWith(
+                        color: AppDesign.textSecondary,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(width: 12),
+
+            // زر الخريطة يسار
+            SizedBox(
+              height: 48,
+              width: 140,
+              child: OutlinedButton.icon(
+                onPressed: () async {
+                  const String googleMapUrl =
+                      'https://www.google.com/maps/search/?api=1&query=24.768932,46.728328';
+
+                  final Uri url = Uri.parse(googleMapUrl);
+
+                  if (await canLaunchUrl(url)) {
+                    await launchUrl(
+                      url,
+                      mode: LaunchMode.externalApplication,
+                    );
+                  }
+                },
+
+                icon: Icon(
+                  Icons.location_on_outlined,
+                  color: AppDesign.primary,
+                  size: 18,
+                ),
+
+                label: Text(
+                  'فتح الخريطة',
+                  style: AppDesign.bodyStyle.copyWith(
+                    color: AppDesign.primary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+
+                style: OutlinedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  elevation: 0,
+
+                  side: BorderSide(
+                    color: AppDesign.primary.withOpacity(0.45),
+                    width: 1.2,
+                  ),
+
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(
+                      AppDesign.radiusLG,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 20),
+
+        Divider(
+          color: AppDesign.border,
+          thickness: 1,
+        ),
+
+        const SizedBox(height: 20),
+
+        // ===== ساعات العمل =====
+        Row(
+          textDirection: TextDirection.rtl,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+
+            // أيقونة يمين
+            _circleIcon(Icons.access_time_rounded),
+
+            const SizedBox(width: 14),
+
+            // النص
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      'ساعات العمل',
+                      textAlign: TextAlign.right,
+                      style: AppDesign.subtitleStyle.copyWith(
+                        color: AppDesign.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      'الأحد - الخميس: 9:00 ص - 5:00 م\nالجمعة والسبت: مغلق',
+                      textAlign: TextAlign.right,
+                      style: AppDesign.bodyStyle.copyWith(
+                        color: AppDesign.textSecondary,
+                        fontSize: 13,
+                        height: 1.7,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+  Widget _circleIcon(IconData icon) {
+    return Container(
+      width: 46,
+      height: 46,
+      decoration: BoxDecoration(
+        color: AppDesign.secondary.withOpacity(0.14),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(icon, color: AppDesign.primary, size: 24),
+    );
+  }
+
+  Widget _buildLogoutButton() {
+    return GestureDetector(
+      onTap: _showLogoutDialog,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            'تسجيل الخروج',
+            style: AppDesign.subtitleStyle.copyWith(
+              color: Colors.red,
+              fontSize: 21,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Icon(Icons.logout_rounded, color: Colors.red, size: 24),
+        ],
+      ),
+    );
+  }
+
+  BoxDecoration _cardDecoration() {
+    return BoxDecoration(
+      color: AppDesign.white,
+      borderRadius: BorderRadius.circular(AppDesign.radiusXL),
+      border: Border.all(color: AppDesign.border),
+      boxShadow: [
+        BoxShadow(
+          color: AppDesign.black.withOpacity(0.05),
+          blurRadius: 14,
+          offset: const Offset(0, 8),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBottomNavigationBar() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+      decoration: BoxDecoration(
+        color: AppDesign.white,
+        borderRadius: BorderRadius.circular(AppDesign.radiusXL),
+        boxShadow: [
+          BoxShadow(
+            color: AppDesign.black.withOpacity(0.06),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: NavigationBar(
+        height: 78,
+        selectedIndex: _bottomNavIndex,
+        backgroundColor: Colors.transparent,
+        indicatorColor: AppDesign.secondary.withOpacity(0.16),
+        surfaceTintColor: Colors.transparent,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        onDestinationSelected: (index) {
+          if (index == _bottomNavIndex && index == 2) return;
+
+          setState(() {
+            _bottomNavIndex = index;
+          });
+
+          if (index == 0) {
+            Navigator.pushReplacementNamed(
+              context,
+              '/donorHome',
+              arguments: widget.userId,
+            );
+          } else if (index == 1) {
+            Navigator.pushReplacementNamed(
+              context,
+              '/viewDonation',
+              arguments: widget.userId,
+            );
+          }
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined, color: AppDesign.primary),
+            selectedIcon: Icon(Icons.home_rounded, color: AppDesign.primary),
+            label: 'الرئيسية',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.volunteer_activism_outlined, color: AppDesign.primary),
+            selectedIcon: Icon(Icons.volunteer_activism_rounded, color: AppDesign.primary),
+            label: 'تبرعاتي',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.more_horiz_rounded, color: AppDesign.primary),
+            selectedIcon: Icon(Icons.more_horiz_rounded, color: AppDesign.primary),
+            label: 'المزيد',
+          ),
+        ],
+      ),
+    );
+  }
+}
