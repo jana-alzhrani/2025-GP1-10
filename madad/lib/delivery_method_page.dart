@@ -7,10 +7,7 @@ import 'app_design.dart';
 class DeliveryMethodPage extends StatefulWidget {
   final String donationId;
 
-  const DeliveryMethodPage({
-    super.key,
-    required this.donationId,
-  });
+  const DeliveryMethodPage({super.key, required this.donationId});
 
   @override
   State<DeliveryMethodPage> createState() => _DeliveryMethodPageState();
@@ -18,8 +15,7 @@ class DeliveryMethodPage extends StatefulWidget {
 
 class _DeliveryMethodPageState extends State<DeliveryMethodPage> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-  final TextEditingController _shortAddressController =
-      TextEditingController();
+  final TextEditingController _shortAddressController = TextEditingController();
 
   String? selectedMethod;
   String? selectedCity;
@@ -47,13 +43,101 @@ class _DeliveryMethodPageState extends State<DeliveryMethodPage> {
     'الملقا',
     'النرجس',
     'الياسمين',
-    'العقيق',
-    'الصحافة',
+    'العارض',
+    'القيروان',
     'حطين',
-    'الربيع',
+    'الصحافة',
     'النخيل',
+    'العقيق',
+    'الربيع',
+    'النفل',
+    'الوادي',
+    'الغدير',
+    'الندى',
+    'بنبان',
+    'العليا',
+    'السليمانية',
+    'الورود',
+    'الملك فهد',
     'المروج',
+    'المصيف',
+    'التعاون',
+    'النزهة',
+    'المغرزات',
+    'الازدهار',
+    'الواحة',
+    'صلاح الدين',
+    'المرسلات',
+    'الرحمانية',
+    'المربع',
+    'الديرة',
+    'البطحاء',
+    'الملز',
+    'الفوطة',
+    'الشميسي',
+    'الصالحية',
+    'الوزارات',
+    'الضباط',
+    'الفاروق',
+    'جرير',
+    'الرمال',
+    'اليرموك',
+    'المونسية',
+    'النهضة',
+    'إشبيلية',
+    'الخليج',
+    'الملك فيصل',
+    'النظيم',
+    'قرطبة',
+    'السعادة',
+    'الجنادرية',
+    'النسيم الغربي',
+    'النسيم الشرقي',
+    'الشهداء',
+    'القادسية',
+    'المعيزلة',
     'الروضة',
+    'السلام',
+    'الفيحاء',
+    'القدس',
+    'غرناطة',
+    'الروابي',
+    'الأندلس',
+    'المنار',
+    'الحمراء',
+    'الريان',
+    'الجزيرة',
+    'الندوة',
+    'السلي',
+    'المشاعل',
+    'الزهور',
+    'الربوة',
+    'العريجاء',
+    'العريجاء الغربية',
+    'العريجاء الوسطى',
+    'ظهرة البديعة',
+    'البديعة',
+    'السويدي',
+    'السويدي الغربي',
+    'سلطانة',
+    'شبرا',
+    'لبن',
+    'نمار',
+    'طويق',
+    'ديراب',
+    'الشفا',
+    'بدر',
+    'المروة',
+    'الفواز',
+    'الحزم',
+    'العزيزية',
+    'الدار البيضاء',
+    'المصفاة',
+    'المنصورة',
+    'غبيراء',
+    'منفوحة',
+    'منفوحة الجديدة',
+    'اليمامة',
   ];
 
   @override
@@ -63,13 +147,11 @@ class _DeliveryMethodPageState extends State<DeliveryMethodPage> {
   }
 
   void _showMessage(String message) {
-  if (!mounted) return;
-
-  AppDesign.showErrorSnackBar(
-    context,
-    message,
-  );
-}
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
 
   String? _validateShortAddress(String? value) {
     final text = value?.trim().toUpperCase() ?? '';
@@ -90,10 +172,7 @@ class _DeliveryMethodPageState extends State<DeliveryMethodPage> {
       'https://www.google.com/maps/search/?api=1&query=$warehouseLat,$warehouseLng',
     );
 
-    final opened = await launchUrl(
-      uri,
-      mode: LaunchMode.externalApplication,
-    );
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
 
     if (!opened) {
       _showMessage('تعذر فتح خرائط Google');
@@ -194,17 +273,11 @@ class _DeliveryMethodPageState extends State<DeliveryMethodPage> {
     if (result != null) {
       setState(() {
         selectedCity = result;
-        selectedDistrict = null;
       });
     }
   }
 
   Future<void> _openDistrictSearch() async {
-    if (selectedCity == null) {
-      _showMessage('يرجى اختيار المدينة أولًا');
-      return;
-    }
-
     final TextEditingController searchController = TextEditingController();
     List<String> filteredDistricts = List.from(riyadhDistricts);
 
@@ -222,100 +295,124 @@ class _DeliveryMethodPageState extends State<DeliveryMethodPage> {
           builder: (context, setModalState) {
             return Directionality(
               textDirection: TextDirection.rtl,
-              child: Padding(
-                padding: EdgeInsets.only(
-                  left: AppDesign.screenPadding,
-                  right: AppDesign.screenPadding,
-                  top: AppDesign.screenPadding,
-                  bottom: MediaQuery.of(context).viewInsets.bottom +
-                      AppDesign.screenPadding,
-                ),
-                child: SizedBox(
-                  height: MediaQuery.of(context).size.height * 0.65,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Center(
-                        child: Container(
-                          width: 44,
-                          height: 5,
-                          decoration: BoxDecoration(
-                            color: AppDesign.border,
-                            borderRadius: BorderRadius.circular(20),
+              child: DraggableScrollableSheet(
+                expand: false,
+                initialChildSize: 0.78,
+                minChildSize: 0.55,
+                maxChildSize: 0.95,
+                builder: (context, scrollController) {
+                  return Padding(
+                    padding: EdgeInsets.only(
+                      left: AppDesign.screenPadding,
+                      right: AppDesign.screenPadding,
+                      top: AppDesign.screenPadding,
+                      bottom:
+                          MediaQuery.of(context).viewInsets.bottom +
+                          AppDesign.screenPadding,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 44,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              color: AppDesign.border,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
                           ),
                         ),
-                      ),
-                      AppGap.lg,
-                      Text(
-                        'اختيار الحي',
-                        style: AppDesign.subtitleStyle.copyWith(
-                          color: AppDesign.primary,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      AppGap.md,
-                      TextField(
-                        controller: searchController,
-                        autofocus: true,
-                        decoration: const InputDecoration(
-                          labelText: 'ابحث باسم الحي',
-                          hintText: 'مثال: المل',
-                          prefixIcon: Icon(Icons.search),
-                        ),
-                        onChanged: (value) {
-                          setModalState(() {
-                            final query = value.trim();
+                        AppGap.lg,
 
-                            filteredDistricts = query.isEmpty
-                                ? List.from(riyadhDistricts)
-                                : riyadhDistricts
-                                    .where(
-                                      (district) =>
-                                          district.startsWith(query),
-                                    )
-                                    .toList();
-                          });
-                        },
-                      ),
-                      AppGap.md,
-                      Expanded(
-                        child: filteredDistricts.isEmpty
-                            ? Center(
-                                child: Text(
-                                  'لا توجد نتائج مطابقة',
-                                  style: AppDesign.bodySecondaryStyle,
-                                ),
-                              )
-                            : ListView.separated(
-                                itemCount: filteredDistricts.length,
-                                separatorBuilder: (_, __) =>
-                                    const Divider(height: 1),
-                                itemBuilder: (context, index) {
-                                  final district = filteredDistricts[index];
+                        Text(
+                          'اختيار الحي',
+                          style: AppDesign.subtitleStyle.copyWith(
+                            color: AppDesign.primary,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
 
-                                  return ListTile(
-                                    title: Text(
-                                      district,
-                                      style: AppDesign.bodyStyle.copyWith(
-                                        fontWeight: FontWeight.w600,
+                        AppGap.md,
+
+                        TextField(
+                          controller: searchController,
+                          autofocus: false,
+                          decoration: const InputDecoration(
+                            labelText: 'ابحث باسم الحي',
+                            hintText: 'مثال: المل',
+                            prefixIcon: Icon(Icons.search),
+                          ),
+                          onChanged: (value) {
+                            setModalState(() {
+                              final query = value.trim();
+
+                              filteredDistricts = query.isEmpty
+                                  ? List.from(riyadhDistricts)
+                                  : riyadhDistricts
+                                        .where(
+                                          (district) =>
+                                              district.contains(query),
+                                        )
+                                        .toList();
+                            });
+                          },
+                        ),
+
+                        AppGap.md,
+
+                        Expanded(
+                          child: filteredDistricts.isEmpty
+                              ? Center(
+                                  child: Text(
+                                    'لا توجد نتائج مطابقة',
+                                    style: AppDesign.bodySecondaryStyle,
+                                  ),
+                                )
+                              : ListView.separated(
+                                  controller: scrollController,
+                                  keyboardDismissBehavior:
+                                      ScrollViewKeyboardDismissBehavior.onDrag,
+                                  itemCount: filteredDistricts.length,
+                                  separatorBuilder: (_, __) =>
+                                      const Divider(height: 1),
+                                  itemBuilder: (context, index) {
+                                    final district = filteredDistricts[index];
+
+                                    return ListTile(
+                                      title: Text(
+                                        district,
+                                        textAlign: TextAlign.right,
+                                        style: AppDesign.bodyStyle.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                       ),
-                                    ),
-                                    trailing: selectedDistrict == district
-                                        ? const Icon(
-                                            Icons.check_circle,
-                                            color: AppDesign.primary,
-                                          )
-                                        : null,
-                                    onTap: () {
-                                      Navigator.pop(context, district);
-                                    },
-                                  );
-                                },
-                              ),
-                      ),
-                    ],
-                  ),
-                ),
+                                      trailing: selectedDistrict == district
+                                          ? const Icon(
+                                              Icons.check_circle,
+                                              color: AppDesign.primary,
+                                            )
+                                          : null,
+                                      onTap: () {
+                                        FocusScope.of(context).unfocus();
+
+                                        Future.delayed(
+                                          const Duration(milliseconds: 100),
+                                          () {
+                                            if (!mounted) return;
+
+                                            Navigator.pop(context, district);
+                                          },
+                                        );
+                                      },
+                                    );
+                                  },
+                                ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
             );
           },
@@ -332,68 +429,92 @@ class _DeliveryMethodPageState extends State<DeliveryMethodPage> {
     }
   }
 
-Future<void> _saveMethod() async {
-  if (selectedMethod == null) {
-    _showMessage('اختر طريقة التوصيل أولاً');
-    return;
-  }
-
-  try {
-    setState(() => saving = true);
-
-    final donationRef = FirebaseFirestore.instance
-        .collection('donations')
-        .doc(widget.donationId);
-
-    /// 🔥 1. تحديث التبرع
-    await donationRef.update({
-      'status': 'published',
-      'deliveryMethod': selectedMethod,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-
-    /// 🔥 2. جلب الصناديق
-    final boxesSnapshot = await FirebaseFirestore.instance
-        .collection('donation_boxes')
-        .where('donationId', isEqualTo: widget.donationId)
-        .get();
-
-    /// 🔥 3. تحديث الصناديق + توليد boxCode
-    for (final boxDoc in boxesSnapshot.docs) {
-      final data = boxDoc.data();
-      final boxNumber = data['boxNumber'] ?? 0;
-
-      final shortId = boxDoc.id.substring(0, 5).toUpperCase();
-      final boxCode = "BOX$boxNumber-$shortId";
-
-      await boxDoc.reference.update({
-        'status': 'published',
-        'boxCode': boxCode,
-      });
+  Future<void> _saveMethod() async {
+    if (selectedMethod == null) {
+      _showMessage('اختر طريقة التوصيل أولاً');
+      return;
     }
 
-    if (!mounted) return;
+    if (selectedMethod == 'pickup') {
+      if (selectedCity == null) {
+        _showMessage('يرجى اختيار المدينة');
+        return;
+      }
 
-    AppDesign.showSuccessSnackBar(
-  context,
-  'تم تأكيد التبرع بنجاح',
-);
+      if (selectedDistrict == null) {
+        _showMessage('يرجى اختيار الحي');
+        return;
+      }
 
-    await Future.delayed(const Duration(milliseconds: 800));
+      if (!_formKey.currentState!.validate()) {
+        return;
+      }
+    }
 
-    Navigator.pushNamedAndRemoveUntil(
-      context,
-      '/viewDonation',
-      (route) => false,
-      arguments: FirebaseAuth.instance.currentUser?.uid ?? '',
-    );
+    try {
+      setState(() => saving = true);
 
-  } catch (e) {
-    _showMessage('فشل الحفظ: $e');
-  } finally {
-    if (mounted) setState(() => saving = false);
+      final donationRef = FirebaseFirestore.instance
+          .collection('donations')
+          .doc(widget.donationId);
+
+      await donationRef.update({
+        'status': 'published',
+        'deliveryMethod': selectedMethod,
+        'city': selectedMethod == 'pickup' ? selectedCity : null,
+        'district': selectedMethod == 'pickup' ? selectedDistrict : null,
+        'shortNationalAddress': selectedMethod == 'pickup'
+            ? _shortAddressController.text.trim().toUpperCase()
+            : null,
+        'warehouseName': selectedMethod == 'self_delivery'
+            ? warehouseName
+            : null,
+        'warehouseLat': selectedMethod == 'self_delivery' ? warehouseLat : null,
+        'warehouseLng': selectedMethod == 'self_delivery' ? warehouseLng : null,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      final boxesSnapshot = await FirebaseFirestore.instance
+          .collection('donation_boxes')
+          .where('donationId', isEqualTo: widget.donationId)
+          .get();
+
+      for (final boxDoc in boxesSnapshot.docs) {
+        final data = boxDoc.data();
+        final boxNumber = data['boxNumber'] ?? 0;
+
+        final shortId = boxDoc.id.substring(0, 5).toUpperCase();
+        final boxCode = "BOX$boxNumber-$shortId";
+
+        await boxDoc.reference.update({
+          'status': 'published',
+          'boxCode': boxCode,
+        });
+      }
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('تم تأكيد التبرع بنجاح'),
+          backgroundColor: AppDesign.success,
+        ),
+      );
+
+      await Future.delayed(const Duration(milliseconds: 800));
+
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        '/viewDonation',
+        (route) => false,
+        arguments: FirebaseAuth.instance.currentUser?.uid ?? '',
+      );
+    } catch (e) {
+      _showMessage('فشل الحفظ: $e');
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
   }
-}
 
   Widget _methodCard({
     required String value,
@@ -410,8 +531,9 @@ Future<void> _saveMethod() async {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.all(AppDesign.cardPadding),
         decoration: BoxDecoration(
-          color:
-              selected ? AppDesign.primary.withOpacity(0.08) : AppDesign.white,
+          color: selected
+              ? AppDesign.primary.withOpacity(0.08)
+              : AppDesign.white,
           borderRadius: BorderRadius.circular(AppDesign.radiusLG),
           border: Border.all(
             color: selected ? AppDesign.primary : AppDesign.border,
@@ -499,8 +621,9 @@ Future<void> _saveMethod() async {
                       color: value == null
                           ? AppDesign.textSecondary
                           : AppDesign.textPrimary,
-                      fontWeight:
-                          value == null ? FontWeight.w400 : FontWeight.w700,
+                      fontWeight: value == null
+                          ? FontWeight.w400
+                          : FontWeight.w700,
                     ),
                   ),
                 ],
@@ -569,11 +692,13 @@ Future<void> _saveMethod() async {
               onChanged: (value) {
                 final upper = value.toUpperCase();
                 if (value != upper) {
-                  _shortAddressController.value =
-                      _shortAddressController.value.copyWith(
-                    text: upper,
-                    selection: TextSelection.collapsed(offset: upper.length),
-                  );
+                  _shortAddressController.value = _shortAddressController.value
+                      .copyWith(
+                        text: upper,
+                        selection: TextSelection.collapsed(
+                          offset: upper.length,
+                        ),
+                      );
                 }
               },
             ),
@@ -709,8 +834,7 @@ Future<void> _saveMethod() async {
                         'يمكنك إيصال التبرع بنفسك إلى المستودع خلال ساعات العمل.',
                     icon: Icons.storefront_outlined,
                   ),
-                  if (selectedMethod == 'self_delivery')
-                    _selfDeliverySection(),
+                  if (selectedMethod == 'self_delivery') _selfDeliverySection(),
                   AppGap.xl,
                   SizedBox(
                     width: double.infinity,
