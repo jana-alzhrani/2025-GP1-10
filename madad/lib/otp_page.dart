@@ -29,7 +29,7 @@ class OtpPage extends StatefulWidget {
 class _OtpPageState extends State<OtpPage> {
   final codeController = TextEditingController();
 
-  int seconds = 30;
+  int seconds = 60;
   bool canResend = false;
 
   int? resendToken;
@@ -42,7 +42,7 @@ class _OtpPageState extends State<OtpPage> {
 
   void startTimer() {
     canResend = false;
-    seconds = 30;
+    seconds = 60;
 
     Future.doWhile(() async {
       await Future.delayed(const Duration(seconds: 1));
@@ -72,10 +72,7 @@ class _OtpPageState extends State<OtpPage> {
 
       verificationFailed: (FirebaseAuthException e) {
         print(e.message);
-       AppDesign.showErrorSnackBar(
-  context,
-  e.message ?? "فشل إرسال الكود",
-);
+        AppDesign.showErrorSnackBar(context, e.message ?? "فشل إرسال الكود");
       },
 
       codeSent: (String verificationId, int? token) {
@@ -88,20 +85,13 @@ class _OtpPageState extends State<OtpPage> {
 
     startTimer();
 
-    AppDesign.showSuccessSnackBar(
-      context,
-      "تم إرسال كود جديد",
-    );
-  
+    AppDesign.showSuccessSnackBar(context, "تم إرسال كود جديد");
   }
 
   Future<void> verifyCode() async {
     try {
       if (codeController.text.trim().isEmpty) {
-        AppDesign.showErrorSnackBar(
-        context,
-        "أدخل رمز التحقق",
-      );
+        AppDesign.showErrorSnackBar(context, "أدخل رمز التحقق");
 
         return;
       }
@@ -129,10 +119,7 @@ class _OtpPageState extends State<OtpPage> {
           'createdAt': FieldValue.serverTimestamp(),
         });
 
-        AppDesign.showSuccessSnackBar(
-          context,
-          "أهلاً وسهلاً بك",
-        );
+        AppDesign.showSuccessSnackBar(context, "أهلاً وسهلاً بك");
 
         Navigator.pushAndRemoveUntil(
           context,
@@ -160,11 +147,8 @@ class _OtpPageState extends State<OtpPage> {
         }
       }
     } catch (e) {
-      AppDesign.showErrorSnackBar(
-        context,
-        "الكود غير صحيح",
-      );
-        
+      AppDesign.showErrorSnackBar(context, "الكود غير صحيح");
+
       codeController.clear();
     }
   }
@@ -226,6 +210,7 @@ class _OtpPageState extends State<OtpPage> {
                   TextField(
                     controller: codeController,
                     keyboardType: TextInputType.number,
+                    textAlign: TextAlign.right,
                     style: TextStyle(fontFamily: AppDesign.fontFamily),
                     decoration: InputDecoration(
                       filled: true,
