@@ -38,7 +38,7 @@ String? itemCountError;
 
   final TextEditingController _itemCountController = TextEditingController();
 
-  final String _apiKey = 'AIzaSyABvSn90NMs7pcPAv_Lr0vDU-1_9GYgZGU'; 
+  final String _apiKey = ''; 
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
 
 
@@ -882,13 +882,7 @@ onPressed: (totalBoxes > 0 && allBoxesSaved())
             'status': 'draft',
           });
 
-          final dataToSave = {
-            'donationId': donationId,
-          };
-
-          print(dataToSave);
-
-          await firestore.collection('donation_boxes').add(dataToSave);
+          
 
           AppDesign.showSuccessSnackBar(
             context,
