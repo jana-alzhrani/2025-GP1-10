@@ -9,7 +9,7 @@ within the community in Saudi Arabia through a supervised mobile platform that c
 donors with eligible beneficiaries. 
 
 # 2.Repository Structure
-GP-Madad/ │ ├── Release-1/ # First full release (application prototype) │ ├── Release-2/ # Final release ├── Madad_Application/ # Final application │ ├── README.md # Project documentation ├── AUTHORS.md # Contributors ├── .gitignore └── .gitattributes
+GP-Madad/ │ ├── Madad/ # First release │ ├── README.md # Project documentation ├── AUTHORS.md # Contributors ├── .gitignore └── .gitattributes
 # 3. Technologies Used
 Frontend: Flutter (Dart) Material Design Firebase SDK
 
