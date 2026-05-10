@@ -61,8 +61,11 @@ class _LoginPageState extends State<LoginPage> {
         verificationCompleted: (_) {},
 
         verificationFailed: (e) {
+          print(e.code);
+          print(e.message);
+
           setState(() {
-            generalError = "فشل إرسال الكود";
+            generalError = e.message ?? "فشل إرسال الكود";
           });
         },
 
