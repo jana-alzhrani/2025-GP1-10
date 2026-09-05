@@ -344,9 +344,11 @@ class _DeliveryMethodPageState extends State<DeliveryMethodPage> {
                             prefixIcon: Icon(Icons.search),
                           ),
                           onChanged: (value) {
-                            setModalState(() {
-                              final query = value.trim();
+                            if (!mounted) return;
 
+                            final query = value.trim();
+
+                            setModalState(() {
                               filteredDistricts = query.isEmpty
                                   ? List.from(riyadhDistricts)
                                   : riyadhDistricts
@@ -393,17 +395,16 @@ class _DeliveryMethodPageState extends State<DeliveryMethodPage> {
                                               color: AppDesign.primary,
                                             )
                                           : null,
-                                      onTap: () {
+                                      onTap: () async {
                                         FocusScope.of(context).unfocus();
 
-                                        Future.delayed(
-                                          const Duration(milliseconds: 100),
-                                          () {
-                                            if (!mounted) return;
-
-                                            Navigator.pop(context, district);
-                                          },
+                                        await Future.delayed(
+                                          const Duration(milliseconds: 200),
                                         );
+
+                                        if (!context.mounted) return;
+
+                                        Navigator.of(context).pop(district);
                                       },
                                     );
                                   },
@@ -419,8 +420,6 @@ class _DeliveryMethodPageState extends State<DeliveryMethodPage> {
         );
       },
     );
-
-    searchController.dispose();
 
     if (result != null) {
       setState(() {
