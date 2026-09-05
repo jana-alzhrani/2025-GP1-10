@@ -26,45 +26,45 @@ class _BeneficiaryViewDonationPageState
   bool _isAddingToCart = false;
   late Future<Map<String, dynamic>> _donationDetailsFuture;
 
-      @override
-    void initState() {
-      super.initState();
-      _donationDetailsFuture = _loadDonationDetails();
-    }
+  @override
+  void initState() {
+    super.initState();
+    _donationDetailsFuture = _loadDonationDetails();
+  }
+
   int _parseInt(dynamic value) {
     if (value is int) return value;
     if (value is double) return value.toInt();
     if (value is String) return int.tryParse(value) ?? 0;
     return 0;
   }
-Future<Map<String, dynamic>> _loadDonationDetails() async {
-  final boxDoc = await FirebaseFirestore.instance
-      .collection('donation_boxes')
-      .doc(widget.boxId)
-      .get();
 
-  if (!boxDoc.exists) {
-    throw Exception('لم يتم العثور على الصندوق');
+  Future<Map<String, dynamic>> _loadDonationDetails() async {
+    final boxDoc = await FirebaseFirestore.instance
+        .collection('donation_boxes')
+        .doc(widget.boxId)
+        .get();
+
+    if (!boxDoc.exists) {
+      throw Exception('لم يتم العثور على الصندوق');
+    }
+
+    final boxData = boxDoc.data()!;
+
+    final items = boxData['items'];
+    List<Map<String, dynamic>> parsedItems = [];
+
+    if (items is List) {
+      parsedItems = items
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    }
+
+    return {'box': boxData, 'items': parsedItems};
   }
 
-  final boxData = boxDoc.data()!;
-
-  final items = boxData['items'];
-  List<Map<String, dynamic>> parsedItems = [];
-
-  if (items is List) {
-    parsedItems = items
-        .whereType<Map>()
-        .map((item) => Map<String, dynamic>.from(item))
-        .toList();
-  }
-
-  return {
-    'box': boxData,
-    'items': parsedItems,
-  };
-}
- Uint8List? _decodeImage(String? imageBase64) {
+  Uint8List? _decodeImage(String? imageBase64) {
     if (imageBase64 == null || imageBase64.trim().isEmpty) return null;
 
     try {
@@ -74,130 +74,114 @@ Future<Map<String, dynamic>> _loadDonationDetails() async {
     }
   }
 
- Future<void> _addToCart(Map<String, dynamic> boxData) async {
-  try {
-    setState(() => _isAddingToCart = true);
+  Future<void> _addToCart(Map<String, dynamic> boxData) async {
+    try {
+      setState(() => _isAddingToCart = true);
 
-    final existingCartItem = await FirebaseFirestore.instance
-        .collection('cart')
-        .where('beneficiaryId', isEqualTo: widget.userId)
-        .where('boxId', isEqualTo: widget.boxId)
-        .where('status', isEqualTo: 'in_cart')
-        .limit(1)
-        .get();
+      final existingCartItem = await FirebaseFirestore.instance
+          .collection('cart')
+          .where('beneficiaryId', isEqualTo: widget.userId)
+          .where('boxId', isEqualTo: widget.boxId)
+          .where('status', isEqualTo: 'in_cart')
+          .limit(1)
+          .get();
 
-    if (existingCartItem.docs.isNotEmpty) {
+      if (existingCartItem.docs.isNotEmpty) {
+        if (!mounted) return;
+
+        AppDesign.showErrorSnackBar(context, 'التبرع مضاف للسلة مسبقًا');
+        return;
+      }
+
+      await FirebaseFirestore.instance.collection('cart').add({
+        'beneficiaryId': widget.userId,
+        'boxId': widget.boxId,
+        'donationId': boxData['donationId'] ?? '',
+        'status': 'in_cart',
+
+        'gender': boxData['gender'] ?? '',
+        'ageGroup': boxData['ageGroup']?['label'] ?? '',
+        'generalSize': boxData['generalSize'] ?? '',
+        'numberOfItems': (boxData['items'] is List)
+            ? (boxData['items'] as List).length
+            : 0,
+
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
       if (!mounted) return;
 
-      AppDesign.showErrorSnackBar(
-  context,
-  'التبرع مضاف للسلة مسبقًا',
-);
-      return;
-    }
+      AppDesign.showSuccessSnackBar(context, 'تمت إضافة التبرع إلى السلة ');
+    } catch (e) {
+      if (!mounted) return;
 
-    await FirebaseFirestore.instance.collection('cart').add({
-      'beneficiaryId': widget.userId,
-      'boxId': widget.boxId,
-      'donationId': boxData['donationId'] ?? '',
-      'status': 'in_cart',
-
-      'gender': boxData['gender'] ?? '',
-      'ageGroup': boxData['ageGroup']?['label'] ?? '',
-      'generalSize': boxData['generalSize'] ?? '',
-      'numberOfItems': (boxData['items'] is List)
-          ? (boxData['items'] as List).length
-          : 0,
-
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-
-    
-
-    if (!mounted) return;
-
-   AppDesign.showSuccessSnackBar(
-  context,
-    'تمت إضافة التبرع إلى السلة ',
-    );
-
-    
-  } catch (e) {
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('فشل إضافة الصندوق إلى السلة: $e')),
-    );
-  } finally {
-    if (mounted) {
-      setState(() => _isAddingToCart = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('فشل إضافة الصندوق إلى السلة: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isAddingToCart = false);
+      }
     }
   }
-}
-Widget _infoRow(
-  IconData icon,
-  String title,
-  String value,
-) {
-  return Row(
-    textDirection: TextDirection.rtl,
-    children: [
-      Icon(icon, size: 20, color: AppDesign.primary),
-      const SizedBox(width: 8),
-      Text(
-        title,
-        style: AppDesign.captionStyle.copyWith(
-          color: AppDesign.textSecondary,
-        ),
-      ),
-      const SizedBox(width: 12),
-      Text(
-        value,
-        style: AppDesign.bodyStyle.copyWith(
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    ],
-  );
-}
-Widget _chip(IconData icon, String text) {
-  return Container(
-    padding: const EdgeInsets.symmetric(
-      horizontal: AppDesign.spaceMD,
-      vertical: AppDesign.spaceSM,
-    ),
-    decoration: BoxDecoration(
-      color: AppDesign.surfaceAlt,
-      borderRadius: BorderRadius.circular(AppDesign.radiusLG),
-      border: Border.all(color: AppDesign.border),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
+
+  Widget _infoRow(IconData icon, String title, String value) {
+    return Row(
       textDirection: TextDirection.rtl,
       children: [
-        Icon(
-          icon,
-          size: AppDesign.iconSM,
-          color: AppDesign.primary,
-        ),
-        const SizedBox(width: AppDesign.spaceSM),
+        Icon(icon, size: 20, color: AppDesign.primary),
+        const SizedBox(width: 8),
         Text(
-          text,
+          title,
           style: AppDesign.captionStyle.copyWith(
-            color: AppDesign.textPrimary,
-            fontWeight: FontWeight.w600,
+            color: AppDesign.textSecondary,
           ),
         ),
+        const SizedBox(width: 12),
+        Text(
+          value,
+          style: AppDesign.bodyStyle.copyWith(fontWeight: FontWeight.w700),
+        ),
       ],
-    ),
-  );
-}
+    );
+  }
+
+  Widget _chip(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppDesign.spaceMD,
+        vertical: AppDesign.spaceSM,
+      ),
+      decoration: BoxDecoration(
+        color: AppDesign.surfaceAlt,
+        borderRadius: BorderRadius.circular(AppDesign.radiusLG),
+        border: Border.all(color: AppDesign.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        textDirection: TextDirection.rtl,
+        children: [
+          Icon(icon, size: AppDesign.iconSM, color: AppDesign.primary),
+          const SizedBox(width: AppDesign.spaceSM),
+          Text(
+            text,
+            style: AppDesign.captionStyle.copyWith(
+              color: AppDesign.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildItemCard(Map<String, dynamic> item, int itemIndex) {
-final imageBase64 = item['imageBase64'];
-final imageUrl = item['imageUrl'];
-final Uint8List? imageBytes =
-    (imageBase64 != null) ? _decodeImage(imageBase64.toString()) : null;
-        final type = (item['type'] ?? 'غير محدد').toString();
+    final imageBase64 = item['imageBase64'];
+    final imageUrl = item['imageUrl'];
+    final Uint8List? imageBytes = (imageBase64 != null)
+        ? _decodeImage(imageBase64.toString())
+        : null;
+    final type = (item['type'] ?? 'غير محدد').toString();
     final size = (item['size'] ?? '').toString();
 
     return Container(
@@ -223,8 +207,9 @@ final Uint8List? imageBytes =
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 GestureDetector(
-                  onTap:
-                      imageBytes == null ? null : () => _showImagePreview(imageBytes),
+                  onTap: imageBytes == null
+                      ? null
+                      : () => _showImagePreview(imageBytes),
                   child: Container(
                     width: 88,
                     height: 88,
@@ -233,33 +218,37 @@ final Uint8List? imageBytes =
                       borderRadius: BorderRadius.circular(AppDesign.radiusMD),
                       border: Border.all(color: AppDesign.border),
                     ),
-                   child: imageBytes != null
-    ? ClipRRect(
-        borderRadius: BorderRadius.circular(AppDesign.radiusMD),
-        child: Image.memory(
-          imageBytes,
-          fit: BoxFit.cover,
-          gaplessPlayback: true,
-        ),
-      )
-    : (imageUrl != null
-        ? ClipRRect(
-            borderRadius: BorderRadius.circular(AppDesign.radiusMD),
-            child: Image.network(
-              imageUrl.toString(),
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => const Icon(
-                Icons.broken_image,
-                color: AppDesign.secondary,
-                size: 30,
-              ),
-            ),
-          )
-        : const Icon(
-            Icons.image_not_supported_outlined,
-            color: AppDesign.secondary,
-            size: 30,
-          )),
+                    child: imageBytes != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(
+                              AppDesign.radiusMD,
+                            ),
+                            child: Image.memory(
+                              imageBytes,
+                              fit: BoxFit.cover,
+                              gaplessPlayback: true,
+                            ),
+                          )
+                        : (imageUrl != null
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(
+                                    AppDesign.radiusMD,
+                                  ),
+                                  child: Image.network(
+                                    imageUrl.toString(),
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => const Icon(
+                                      Icons.broken_image,
+                                      color: AppDesign.secondary,
+                                      size: 30,
+                                    ),
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.image_not_supported_outlined,
+                                  color: AppDesign.secondary,
+                                  size: 30,
+                                )),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -293,19 +282,19 @@ final Uint8List? imageBytes =
               ],
             ),
           ),
-        Positioned(
-  top: -5,
-  right: 24,
-  child: Text(
-    'القطعة ${itemIndex + 1}',
-    style: AppDesign.subtitleStyle.copyWith(
-      color: AppDesign.textPrimary,
-      fontWeight: FontWeight.w800,
-      fontSize: 15,
-    ),
-  ),
-),
-],
+          Positioned(
+            top: -5,
+            right: 24,
+            child: Text(
+              'القطعة ${itemIndex + 1}',
+              style: AppDesign.subtitleStyle.copyWith(
+                color: AppDesign.textPrimary,
+                fontWeight: FontWeight.w800,
+                fontSize: 15,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -325,9 +314,7 @@ final Uint8List? imageBytes =
           ),
           title: Text(
             'تفاصيل التبرع',
-            style: AppDesign.h2Style.copyWith(
-              color: AppDesign.textPrimary,
-            ),
+            style: AppDesign.h2Style.copyWith(color: AppDesign.textPrimary),
           ),
           centerTitle: true,
           backgroundColor: AppDesign.background,
@@ -359,17 +346,12 @@ final Uint8List? imageBytes =
 
             if (!snapshot.hasData) {
               return Center(
-                child: Text(
-                  'لا توجد بيانات',
-                  style: AppDesign.bodyStyle,
-                ),
+                child: Text('لا توجد بيانات', style: AppDesign.bodyStyle),
               );
             }
-            final boxData =
-                   snapshot.data!['box'] as Map<String, dynamic>;
+            final boxData = snapshot.data!['box'] as Map<String, dynamic>;
 
-            final items =
-                snapshot.data!['items'] as List<Map<String, dynamic>>;
+            final items = snapshot.data!['items'] as List<Map<String, dynamic>>;
 
             final gender = (boxData['gender'] ?? '-').toString();
             final ageGroup = (boxData['ageGroup']?['label'] ?? '-').toString();
@@ -385,47 +367,43 @@ final Uint8List? imageBytes =
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Container(
-  width: double.infinity,
-  padding: const EdgeInsets.all(AppDesign.cardPadding),
-  decoration: AppDesign.primaryCardDecoration,
-  child: Directionality(
-    textDirection: TextDirection.rtl,
-    child: Column(
-      children: [
-        _infoRow(
-          Icons.wc_outlined,
-          "الجنس",
-          gender,
-        ),
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(AppDesign.cardPadding),
+                          decoration: AppDesign.primaryCardDecoration,
+                          child: Directionality(
+                            textDirection: TextDirection.rtl,
+                            child: Column(
+                              children: [
+                                _infoRow(Icons.wc_outlined, "الجنس", gender),
 
-        const SizedBox(height: 12),
+                                const SizedBox(height: 12),
 
-        if (ageGroup.contains('بالغون'))
-          _infoRow(
-            Icons.straighten_outlined,
-            "المقاس",
-            generalSize.trim().isNotEmpty
-                ? generalSize
-                : "-",
-          )
-        else
-          _infoRow(
-            Icons.cake_outlined,
-            "الفئة العمرية",
-            ageGroup,
-          ),
+                                if (ageGroup.contains('بالغون'))
+                                  _infoRow(
+                                    Icons.straighten_outlined,
+                                    "المقاس",
+                                    generalSize.trim().isNotEmpty
+                                        ? generalSize
+                                        : "-",
+                                  )
+                                else
+                                  _infoRow(
+                                    Icons.cake_outlined,
+                                    "الفئة العمرية",
+                                    ageGroup,
+                                  ),
 
-        const SizedBox(height: 12),
+                                const SizedBox(height: 12),
 
-        _infoRow(
-          Icons.inventory_2_outlined,
-          "عدد القطع",
-          "$numberOfItems قطع",
-        ),
-      ],
-    ),
-  ),
-),
+                                _infoRow(
+                                  Icons.inventory_2_outlined,
+                                  "عدد القطع",
+                                  "$numberOfItems قطع",
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                         const SizedBox(height: AppDesign.spaceXL),
                         Align(
                           alignment: Alignment.centerRight,
@@ -442,8 +420,9 @@ final Uint8List? imageBytes =
                         if (items.isEmpty)
                           Container(
                             width: double.infinity,
-                            padding:
-                                const EdgeInsets.all(AppDesign.cardPadding),
+                            padding: const EdgeInsets.all(
+                              AppDesign.cardPadding,
+                            ),
                             decoration: AppDesign.primaryCardDecoration,
                             child: Text(
                               'لا توجد قطع مرتبطة بهذا التبرع حالياً',
@@ -455,9 +434,9 @@ final Uint8List? imageBytes =
                           )
                         else
                           ...List.generate(
-                          items.length,
-                          (index) => _buildItemCard(items[index], index),
-                        ),
+                            items.length,
+                            (index) => _buildItemCard(items[index], index),
+                          ),
                         const SizedBox(height: AppDesign.space2XL),
                       ],
                     ),
@@ -476,35 +455,34 @@ final Uint8List? imageBytes =
                       width: double.infinity,
                       height: AppDesign.buttonHeightMD,
                       child: ElevatedButton(
-                                onPressed: _isAddingToCart
-                                    ? null
-                                    : () => _addToCart(boxData),
+                        onPressed: _isAddingToCart
+                            ? null
+                            : () => _addToCart(boxData),
 
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              _isAddingToCart
+                                  ? 'جاري الإضافة...'
+                                  : 'إضافة إلى السلة',
+                            ),
 
-                                    Text(
-                                      _isAddingToCart
-                                          ? 'جاري الإضافة...'
-                                          : 'إضافة إلى السلة',
+                            const SizedBox(width: 8),
+
+                            _isAddingToCart
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
                                     ),
-
-                                    const SizedBox(width: 8),
-
-                                    _isAddingToCart
-                                        ? const SizedBox(
-                                            width: 18,
-                                            height: 18,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              color: Colors.white,
-                                            ),
-                                          )
-                                        : const Icon(Icons.add_shopping_cart_outlined),
-                                  ],
-                                ),
-                              ),
+                                  )
+                                : const Icon(Icons.add_shopping_cart_outlined),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -538,10 +516,10 @@ final Uint8List? imageBytes =
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: Image.memory(
-                        imageBytes,
-                        fit: BoxFit.cover,
-                        gaplessPlayback: true,
-                      ),
+                    imageBytes,
+                    fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                  ),
                 ),
                 Positioned(
                   top: 8,
