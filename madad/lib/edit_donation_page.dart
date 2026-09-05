@@ -43,7 +43,7 @@ class _EditDonationPageState extends State<EditDonationPage> {
 
   final TextEditingController _itemCountController = TextEditingController();
 
-  final String _apiKey = '';
+  final String _apiKey = 'AIzaSyDkw67OALJJQ9r9skW8mBeiHkNCB6WFkD0';
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
 
   int totalItems = 0;
@@ -53,20 +53,15 @@ class _EditDonationPageState extends State<EditDonationPage> {
   Map<int, List<Map<String, dynamic>>> boxes = {};
   Set<int> savedBoxes = {};
 
-final List<Map<String, dynamic>> ageGroups = [
-  {'label': 'رضّع (0-2)', 'min': 0, 'max': 2},
-  {'label': 'أطفال صغار (3-5)', 'min': 3, 'max': 5},
-  {'label': 'أطفال (6-9)', 'min': 6, 'max': 9},
-  {'label': 'أطفال (10-15)', 'min': 10, 'max': 15},
-  {'label': 'بالغون', 'min': 16, 'max': 120},
-];
-
-  final List<String> sizeRanges = [
-    "XS - S",
-    "S - M",
-    "M - L",
-    "L - XL",
+  final List<Map<String, dynamic>> ageGroups = [
+    {'label': 'رضّع (0-2)', 'min': 0, 'max': 2},
+    {'label': 'أطفال صغار (3-5)', 'min': 3, 'max': 5},
+    {'label': 'أطفال (6-9)', 'min': 6, 'max': 9},
+    {'label': 'أطفال (10-15)', 'min': 10, 'max': 15},
+    {'label': 'بالغون', 'min': 16, 'max': 120},
   ];
+
+  final List<String> sizeRanges = ["XS - S", "S - M", "M - L", "L - XL"];
 
   final Map<String, String> typeMap = {
     "shirt": "قميص",
@@ -91,9 +86,9 @@ final List<Map<String, dynamic>> ageGroups = [
   }
 
   bool ageNeedsSize() {
-  if (selectedAgeGroup == null) return false;
-  return selectedAgeGroup!['label'] == 'بالغون';
-}
+    if (selectedAgeGroup == null) return false;
+    return selectedAgeGroup!['label'] == 'بالغون';
+  }
 
   bool canOpenBox() {
     if (selectedGender == null) return false;
@@ -105,15 +100,17 @@ final List<Map<String, dynamic>> ageGroups = [
 
     return true;
   }
-Future<String> uploadImage(Uint8List bytes) async {
-  final ref = FirebaseStorage.instance
-      .ref()
-      .child('donation_images/${DateTime.now().millisecondsSinceEpoch}.jpg');
 
-  await ref.putData(bytes);
+  Future<String> uploadImage(Uint8List bytes) async {
+    final ref = FirebaseStorage.instance.ref().child(
+      'donation_images/${DateTime.now().millisecondsSinceEpoch}.jpg',
+    );
 
-  return await ref.getDownloadURL();
-}
+    await ref.putData(bytes);
+
+    return await ref.getDownloadURL();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -122,8 +119,9 @@ Future<String> uploadImage(Uint8List bytes) async {
     selectedAgeGroup = _findAgeGroupByLabel(widget.initialAgeGroupLabel);
 
     totalItems = widget.initialItemCount;
-    _itemCountController.text =
-        widget.initialItemCount == 0 ? '' : widget.initialItemCount.toString();
+    _itemCountController.text = widget.initialItemCount == 0
+        ? ''
+        : widget.initialItemCount.toString();
 
     if (widget.initialBoxes != null && widget.initialBoxes!.isNotEmpty) {
       boxes = Map<int, List<Map<String, dynamic>>>.from(
@@ -145,216 +143,220 @@ Future<String> uploadImage(Uint8List bytes) async {
     _loadDonationBoxes();
   }
 
-Future<void> _loadDonationBoxes() async {
-  try {
-    final snapshot = await firestore
-        .collection('donation_boxes')
-        .where('donationId', isEqualTo: widget.donationId)
-        .get();
+  Future<void> _loadDonationBoxes() async {
+    try {
+      final snapshot = await firestore
+          .collection('donation_boxes')
+          .where('donationId', isEqualTo: widget.donationId)
+          .get();
 
-    final Map<int, List<Map<String, dynamic>>> loadedBoxes = {};
-    String? loadedGeneralSize;
+      final Map<int, List<Map<String, dynamic>>> loadedBoxes = {};
+      String? loadedGeneralSize;
 
-    for (final doc in snapshot.docs) {
-      final data = doc.data();
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
 
-      final int boxNumber = (data['boxNumber'] ?? 0) as int;
-      final List<dynamic> items = data['items'] ?? [];
+        final int boxNumber = (data['boxNumber'] ?? 0) as int;
+        final List<dynamic> items = data['items'] ?? [];
 
-      if (items.isEmpty) continue;
+        if (items.isEmpty) continue;
 
-      if (data['generalSize'] != null) {
-        loadedGeneralSize = data['generalSize'];
+        if (data['generalSize'] != null) {
+          loadedGeneralSize = data['generalSize'];
+        }
+
+        loadedBoxes[boxNumber] = [];
+
+        for (final item in items) {
+          final map = Map<String, dynamic>.from(item);
+
+          Uint8List? imageBytes;
+
+          if (map['imageUrl'] != null &&
+              map['imageUrl'].toString().isNotEmpty) {
+            try {
+              final response = await http.get(Uri.parse(map['imageUrl']));
+
+              if (response.statusCode == 200) {
+                imageBytes = response.bodyBytes;
+              }
+            } catch (e) {
+              debugPrint('Image load error: $e');
+            }
+          }
+          loadedBoxes[boxNumber]!.add({
+            'image': imageBytes,
+            'imageUrl': map['imageUrl'],
+            'type': map['type'],
+            'size': map['size'],
+            'isValid': imageBytes != null,
+            'error': null,
+          });
+        }
       }
 
-      loadedBoxes[boxNumber] = [];
+      if (!mounted) return;
 
-      for (final item in items) {
-        final map = Map<String, dynamic>.from(item);
+      setState(() {
+        if (loadedBoxes.isNotEmpty) {
+          boxes = loadedBoxes;
 
-       Uint8List? imageBytes;
+          totalBoxes = loadedBoxes.length;
 
-if (map['imageUrl'] != null &&
-    map['imageUrl'].toString().isNotEmpty) {
-  try {
-    final response = await http.get(
-      Uri.parse(map['imageUrl']),
-    );
+          totalItems = loadedBoxes.values.fold(
+            0,
+            (sum, items) => sum + items.length,
+          );
 
-    if (response.statusCode == 200) {
-      imageBytes = response.bodyBytes;
+          _itemCountController.text = totalItems.toString();
+
+          savedBoxes = loadedBoxes.keys.toSet();
+        }
+
+        if (loadedGeneralSize != null) {
+          generalSize = loadedGeneralSize;
+        }
+
+        isLoadingBoxes = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isLoadingBoxes = false;
+      });
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('فشل تحميل محتوى التبرع: $e')));
     }
-  } catch (e) {
-    debugPrint('Image load error: $e');
   }
-}
-        loadedBoxes[boxNumber]!.add({
-          'image': imageBytes,
-          'imageUrl': map['imageUrl'],
-          'type': map['type'],
-          'size': map['size'],
-          'isValid': imageBytes != null,
-          'error': null,
-        });
-      }
+
+  Map<String, dynamic> _emptyItem() {
+    return {
+      'image': null,
+      'imageUrl': null,
+
+      'type': null,
+      'size': null,
+      'isValid': false,
+      'error': null,
+    };
+  }
+
+  void _updateItemCount(String value) {
+    setState(() {
+      itemCountError = null;
+      changesSaved = false;
+    });
+
+    if (value.isEmpty) {
+      setState(() {
+        totalItems = 0;
+        totalBoxes = 0;
+        boxes = {};
+        savedBoxes.clear();
+        openedBox = null;
+      });
+      return;
     }
 
-    if (!mounted) return;
+    final parsed = int.tryParse(value);
 
-    setState(() {
-      if (loadedBoxes.isNotEmpty) {
-        boxes = loadedBoxes;
+    if (parsed == null) {
+      setState(() {
+        itemCountError = "الرجاء إدخال أرقام فقط";
+      });
+      return;
+    }
 
-        totalBoxes = loadedBoxes.length;
+    if (parsed > 100) {
+      setState(() {
+        itemCountError = "الحد الأقصى 100 قطعة";
+        totalItems = 0;
+        totalBoxes = 0;
+        boxes = {};
+        savedBoxes.clear();
+        openedBox = null;
+      });
+      return;
+    }
 
-        totalItems = loadedBoxes.values.fold(
-          0,
-          (sum, items) => sum + items.length,
-        );
+    if (parsed <= 0) return;
 
-        _itemCountController.text = totalItems.toString();
-
-        savedBoxes = loadedBoxes.keys.toSet();
-      }
-
-      if (loadedGeneralSize != null) {
-        generalSize = loadedGeneralSize;
-      }
-
-      isLoadingBoxes = false;
-    });
-  } catch (e) {
-    if (!mounted) return;
-
-    setState(() {
-      isLoadingBoxes = false;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('فشل تحميل محتوى التبرع: $e'),
+    final oldBoxes = boxes.map(
+      (key, value) => MapEntry(
+        key,
+        value.map((item) => Map<String, dynamic>.from(item)).toList(),
       ),
     );
-  }
-}
-Map<String, dynamic> _emptyItem() {
-  return {
-    'image': null,
-        'imageUrl': null,
 
-    'type': null,
-    'size': null,
-    'isValid': false,
-    'error': null,
-  };
-}
-  void _updateItemCount(String value) {
-  setState(() {
-    itemCountError = null;
-    changesSaved = false;
-  });
+    final newTotalItems = parsed;
+    final newTotalBoxes = (newTotalItems / 5).ceil();
 
-  if (value.isEmpty) {
-    setState(() {
-      totalItems = 0;
-      totalBoxes = 0;
-      boxes = {};
-      savedBoxes.clear();
-      openedBox = null;
-    });
-    return;
-  }
+    final Map<int, List<Map<String, dynamic>>> newBoxes = {};
+    int remainingItems = newTotalItems;
 
-  final parsed = int.tryParse(value);
+    for (int i = 1; i <= newTotalBoxes; i++) {
+      final itemsInThisBox = remainingItems >= 5 ? 5 : remainingItems;
+      final existing = oldBoxes[i] ?? [];
 
-  if (parsed == null) {
-    setState(() {
-      itemCountError = "الرجاء إدخال أرقام فقط";
-    });
-    return;
-  }
+      if (existing.length >= itemsInThisBox) {
+        newBoxes[i] = existing.take(itemsInThisBox).toList();
+      } else {
+        final extraItems = List.generate(
+          itemsInThisBox - existing.length,
+          (_) => _emptyItem(),
+        );
 
-  if (parsed > 100) {
-    setState(() {
-      itemCountError = "الحد الأقصى 100 قطعة";
-      totalItems = 0;
-      totalBoxes = 0;
-      boxes = {};
-      savedBoxes.clear();
-      openedBox = null;
-    });
-    return;
-  }
+        newBoxes[i] = [...existing, ...extraItems];
 
-  if (parsed <= 0) return;
+        // مهم جدًا: الصندوق صار غير محفوظ لأن فيه قطع جديدة
+        savedBoxes.remove(i);
+      }
 
-  final oldBoxes = Map<int, List<Map<String, dynamic>>>.from(boxes);
-
-  final newTotalItems = parsed;
-  final newTotalBoxes = (newTotalItems / 5).ceil();
-
-  final Map<int, List<Map<String, dynamic>>> newBoxes = {};
-  int remainingItems = newTotalItems;
-
-  for (int i = 1; i <= newTotalBoxes; i++) {
-    final itemsInThisBox = remainingItems >= 5 ? 5 : remainingItems;
-    final existing = oldBoxes[i] ?? [];
-
-    if (existing.length >= itemsInThisBox) {
-      newBoxes[i] = existing.take(itemsInThisBox).toList();
-    } else {
-      final extraItems = List.generate(
-        itemsInThisBox - existing.length,
-        (_) => _emptyItem(),
-      );
-
-      newBoxes[i] = [...existing, ...extraItems];
-
-      // مهم جدًا: الصندوق صار غير محفوظ لأن فيه قطع جديدة
-      savedBoxes.remove(i);
+      remainingItems -= itemsInThisBox;
     }
 
-    remainingItems -= itemsInThisBox;
+    setState(() {
+      totalItems = newTotalItems;
+      totalBoxes = newTotalBoxes;
+      boxes = newBoxes;
+      savedBoxes.removeWhere((boxNumber) => boxNumber > totalBoxes);
+      openedBox = null;
+    });
   }
 
-  setState(() {
-    totalItems = newTotalItems;
-    totalBoxes = newTotalBoxes;
-    boxes = newBoxes;
-    savedBoxes.removeWhere((boxNumber) => boxNumber > totalBoxes);
-    openedBox = null;
-  });
-}
-Future<void> _pickItemImage(int box, int index) async {
-  boxes[box]![index]['imageUrl'] = null;
-  if (!boxes.containsKey(box) || index >= boxes[box]!.length) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('حدث خطأ في تحديد القطعة')),
-    );
-    return;
+  Future<void> _pickItemImage(int box, int index) async {
+    boxes[box]![index]['imageUrl'] = null;
+    if (!boxes.containsKey(box) || index >= boxes[box]!.length) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('حدث خطأ في تحديد القطعة')));
+      return;
+    }
+
+    final picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+
+    if (image == null) return;
+
+    final bytes = await image.readAsBytes();
+
+    setState(() {
+      boxes[box]![index]['image'] = bytes;
+      boxes[box]![index]['isValid'] = false;
+      boxes[box]![index]['error'] = "جاري الفحص...";
+      boxes[box]![index]['type'] = null;
+      boxes[box]![index]['size'] = null;
+
+      // مهم: الصندوق يحتاج حفظ من جديد
+      savedBoxes.remove(box);
+      changesSaved = false;
+    });
+
+    await _verifyImageWithGemini(box, index, bytes);
   }
-
-  final picker = ImagePicker();
-  final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-
-  if (image == null) return;
-
-  final bytes = await image.readAsBytes();
-
-  setState(() {
-    boxes[box]![index]['image'] = bytes;
-    boxes[box]![index]['isValid'] = false;
-    boxes[box]![index]['error'] = "جاري الفحص...";
-    boxes[box]![index]['type'] = null;
-    boxes[box]![index]['size'] = null;
-
-    // مهم: الصندوق يحتاج حفظ من جديد
-    savedBoxes.remove(box);
-    changesSaved = false;
-  });
-
-  await _verifyImageWithGemini(box, index, bytes);
-}
 
   Future<void> _verifyImageWithGemini(
     int box,
@@ -365,8 +367,6 @@ Future<void> _pickItemImage(int box, int index) async {
       boxes[box]![index]['error'] = "جاري الفحص...";
     });
 
-   
-
     final String url =
         'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=$_apiKey';
     try {
@@ -376,15 +376,11 @@ Future<void> _pickItemImage(int box, int index) async {
         Uri.parse(url),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-             "contents": [
-
+          "contents": [
             {
-
               "parts": [
-
                 {
-
-            "text": """
+                  "text": """
 Check the image.
 
 If it is a valid clothing item or bag, answer in this format:
@@ -400,25 +396,20 @@ Reject if:
 - completely black
 - blurry
 - not clothing or bag
-"""
-
+""",
                 },
 
-{"inline_data": {
-  "mime_type": "image/jpeg",
-  "data": base64Image
-}}
-              ]
-
-            }
-
-          ]
-
+                {
+                  "inline_data": {
+                    "mime_type": "image/jpeg",
+                    "data": base64Image,
+                  },
+                },
+              ],
+            },
+          ],
         }),
-
       );
-
-
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -444,10 +435,7 @@ Reject if:
               boxes[box]![index]['size'] = null;
             }
 
-           AppDesign.showImageValidSnackBar(
-            context,
-            "الصورة صالحة",
-          );
+            AppDesign.showImageValidSnackBar(context, "الصورة صالحة");
           } else {
             boxes[box]![index]['image'] = null;
             boxes[box]![index]['type'] = null;
@@ -455,10 +443,7 @@ Reject if:
             boxes[box]![index]['isValid'] = false;
             boxes[box]![index]['error'] = null;
 
-            AppDesign.showImageInvalidSnackBar(
-              context,
-              "الصورة غير صالحة!",
-            );
+            AppDesign.showImageInvalidSnackBar(context, "الصورة غير صالحة!");
           }
         });
       } else {
@@ -512,7 +497,8 @@ Reject if:
 
     if (!_validateOpenedBox(openedBox!)) {
       AppDesign.showErrorSnackBar(
-  context,'يرجى إكمال جميع بيانات الصندوق أولاً',
+        context,
+        'يرجى إكمال جميع بيانات الصندوق أولاً',
       );
       return;
     }
@@ -534,7 +520,8 @@ Reject if:
   Future<void> _saveChanges() async {
     if (!_isAllDataComplete()) {
       AppDesign.showErrorSnackBar(
-  context,'يرجى إكمال جميع الحقول والقطع أولاً',
+        context,
+        'يرجى إكمال جميع الحقول والقطع أولاً',
       );
       return;
     }
@@ -570,46 +557,45 @@ Reject if:
         await doc.reference.delete();
       }
 
-  for (final entry in boxes.entries) {
-  final int boxNumber = entry.key;
-  final List<Map<String, dynamic>> items = entry.value;
+      for (final entry in boxes.entries) {
+        final int boxNumber = entry.key;
+        final List<Map<String, dynamic>> items = entry.value;
 
-  final uploadedItems = [];
+        final uploadedItems = [];
 
-  for (final e in items) {
-    String imageUrl = '';
+        for (final e in items) {
+          String imageUrl = '';
 
-   if (e['image'] != null) {
-  if (e['imageUrl'] != null &&
-      e['imageUrl'].toString().isNotEmpty) {
-    imageUrl = e['imageUrl'];
-  } else {
-    imageUrl = await uploadImage(e['image']);
-  }
-}
-    uploadedItems.add({
-      'type': e['type'],
-      'size': e['type'] == "حذاء" ? e['size'] : null,
-      'imageUrl': imageUrl,
-    });
-  }
+          if (e['image'] != null) {
+            if (e['imageUrl'] != null && e['imageUrl'].toString().isNotEmpty) {
+              imageUrl = e['imageUrl'];
+            } else {
+              imageUrl = await uploadImage(e['image']);
+            }
+          }
+          uploadedItems.add({
+            'type': e['type'],
+            'size': e['type'] == "حذاء" ? e['size'] : null,
+            'imageUrl': imageUrl,
+          });
+        }
 
-  await firestore.collection('donation_boxes').add({
-    'donationId': widget.donationId,
-    'userId': user?.uid,
-    'boxNumber': boxNumber,
-    'gender': selectedGender,
-    'ageGroup': {
-      'label': selectedAgeGroup!['label'],
-      'min': selectedAgeGroup!['min'],
-      'max': selectedAgeGroup!['max'],
-    },
-    'generalSize': generalSize ?? "",
-    'status': 'draft',
-    'items': uploadedItems,
-    'timestamp': FieldValue.serverTimestamp(),
-  });
-}
+        await firestore.collection('donation_boxes').add({
+          'donationId': widget.donationId,
+          'userId': user?.uid,
+          'boxNumber': boxNumber,
+          'gender': selectedGender,
+          'ageGroup': {
+            'label': selectedAgeGroup!['label'],
+            'min': selectedAgeGroup!['min'],
+            'max': selectedAgeGroup!['max'],
+          },
+          'generalSize': generalSize ?? "",
+          'status': 'draft',
+          'items': uploadedItems,
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+      }
 
       if (!mounted) return;
 
@@ -618,17 +604,14 @@ Reject if:
         changesSaved = true;
       });
 
-      AppDesign.showSuccessSnackBar(
-  context,
-  'تم حفظ التغييرات بنجاح',
-);
+      AppDesign.showSuccessSnackBar(context, 'تم حفظ التغييرات بنجاح');
     } catch (e) {
       if (!mounted) return;
       setState(() => isSaving = false);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('فشل حفظ التغييرات: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('فشل حفظ التغييرات: $e')));
     }
   }
 
@@ -645,32 +628,31 @@ Reject if:
 
   Future<void> _finishAndGoBack() async {
     AppDesign.showSuccessSnackBar(
-  context,
-  'تم تعديل التبرع بنجاح ',
-        duration: Duration(seconds: 1),
-      );
-   
+      context,
+      'تم تعديل التبرع بنجاح ',
+      duration: Duration(seconds: 1),
+    );
 
     await Future.delayed(const Duration(milliseconds: 800));
     _goToViewDonation();
   }
 
   Future<void> _showBackDialog() async {
-  if (changesSaved) {
-    Navigator.pop(context);
-    return;
-  }
+    if (changesSaved) {
+      Navigator.pop(context);
+      return;
+    }
 
-  final confirm = await AppDesign.showAppDialog(
-    context: context,
-    title: 'الرجوع',
-    message: 'لن يتم حفظ التغييرات الحالية، هل تريد الرجوع؟',
-  );
+    final confirm = await AppDesign.showAppDialog(
+      context: context,
+      title: 'الرجوع',
+      message: 'لن يتم حفظ التغييرات الحالية، هل تريد الرجوع؟',
+    );
 
-  if (confirm && mounted) {
-    Navigator.pop(context);
+    if (confirm && mounted) {
+      Navigator.pop(context);
+    }
   }
-}
 
   Widget _buildTopInfoCard() {
     return Container(
@@ -679,10 +661,7 @@ Reject if:
       decoration: BoxDecoration(
         color: AppDesign.background,
         borderRadius: BorderRadius.circular(AppDesign.radiusXL),
-        border: Border.all(
-          color: AppDesign.border,
-          width: 1,
-        ),
+        border: Border.all(color: AppDesign.border, width: 1),
       ),
       child: Directionality(
         textDirection: TextDirection.rtl,
@@ -706,9 +685,7 @@ Reject if:
               child: Text(
                 'يمكنك تعديل بيانات التبرع والصناديق ثم حفظ التغييرات.',
                 textAlign: TextAlign.right,
-                style: AppDesign.bodySecondaryStyle.copyWith(
-                  height: 1.5,
-                ),
+                style: AppDesign.bodySecondaryStyle.copyWith(height: 1.5),
               ),
             ),
           ],
@@ -723,8 +700,7 @@ Reject if:
     return GestureDetector(
       onTap: () {
         if (!canOpenBox()) {
-          AppDesign.showErrorSnackBar(
-      context,'يرجى إكمال جميع الحقول');
+          AppDesign.showErrorSnackBar(context, 'يرجى إكمال جميع الحقول');
           return;
         }
 
@@ -739,10 +715,7 @@ Reject if:
           gradient: LinearGradient(
             colors: isSaved
                 ? [AppDesign.success, AppDesign.primary]
-                : [
-                    AppDesign.softGreen.withOpacity(0.2),
-                    AppDesign.softGreen,
-                  ],
+                : [AppDesign.softGreen.withOpacity(0.2), AppDesign.softGreen],
           ),
         ),
         child: Center(
@@ -803,48 +776,52 @@ Reject if:
                       borderRadius: BorderRadius.circular(AppDesign.radiusSM),
                       border: Border.all(color: AppDesign.border),
                     ),
-                   child: item['image'] != null
-    ? ClipRRect(
-        borderRadius: BorderRadius.circular(AppDesign.radiusSM),
-        child: Image.memory(
-          item['image'] as Uint8List,
-          fit: BoxFit.cover,
-          width: double.infinity,
-          height: double.infinity,
-        ),
-      )
-    : item['imageUrl'] != null
-        ? ClipRRect(
-            borderRadius: BorderRadius.circular(AppDesign.radiusSM),
-            child: Image.network(
-              item['imageUrl'],
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: double.infinity,
-              errorBuilder: (_, __, ___) {
-                return const Icon(Icons.broken_image);
-              },
-            ),
-          )
-        : Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.upload_file_rounded,
-                color: AppDesign.primary,
-                size: AppDesign.iconLG,
-              ),
-              AppGap.xs,
-              Text(
-                "انقر لرفع الصورة",
-                textAlign: TextAlign.center,
-                style: AppDesign.captionStyle.copyWith(
-                  color: AppDesign.primary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
+                    child: item['image'] != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(
+                              AppDesign.radiusSM,
+                            ),
+                            child: Image.memory(
+                              item['image'] as Uint8List,
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                              height: double.infinity,
+                            ),
+                          )
+                        : item['imageUrl'] != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(
+                              AppDesign.radiusSM,
+                            ),
+                            child: Image.network(
+                              item['imageUrl'],
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                              height: double.infinity,
+                              errorBuilder: (_, __, ___) {
+                                return const Icon(Icons.broken_image);
+                              },
+                            ),
+                          )
+                        : Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.upload_file_rounded,
+                                color: AppDesign.primary,
+                                size: AppDesign.iconLG,
+                              ),
+                              AppGap.xs,
+                              Text(
+                                "انقر لرفع الصورة",
+                                textAlign: TextAlign.center,
+                                style: AppDesign.captionStyle.copyWith(
+                                  color: AppDesign.primary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
                   ),
                 ),
                 AppGap.wMD,
@@ -858,26 +835,26 @@ Reject if:
                           filled: true,
                           fillColor: AppDesign.surface,
                         ),
-                        items: const [
-                          "قميص",
-                          "بنطلون",
-                          "فستان",
-                          "معطف",
-                          "حذاء",
-                          "حقيبة",
-                          "قبعة",
-                        ]
-                            .map(
-                              (e) => DropdownMenuItem<String>(
-                                value: e,
-                                child: Text(e),
-                              ),
-                            )
-                            .toList(),
+                        items:
+                            const [
+                                  "قميص",
+                                  "بنطلون",
+                                  "فستان",
+                                  "معطف",
+                                  "حذاء",
+                                  "حقيبة",
+                                  "قبعة",
+                                ]
+                                .map(
+                                  (e) => DropdownMenuItem<String>(
+                                    value: e,
+                                    child: Text(e),
+                                  ),
+                                )
+                                .toList(),
                         onChanged: (v) => setState(() {
                           boxes[openedBox]![idx]['type'] = v;
                           boxes[openedBox]![idx]['size'] = null;
-
 
                           savedBoxes.remove(openedBox);
                           changesSaved = false;
@@ -892,10 +869,7 @@ Reject if:
                             filled: true,
                             fillColor: AppDesign.surface,
                           ),
-                          items: List.generate(
-                            28,
-                            (i) => (20 + i).toString(),
-                          )
+                          items: List.generate(28, (i) => (20 + i).toString())
                               .map(
                                 (e) => DropdownMenuItem<String>(
                                   value: e,
@@ -921,9 +895,7 @@ Reject if:
               AppGap.sm,
               Text(
                 item['error'] ?? '',
-                style: AppDesign.captionStyle.copyWith(
-                  color: AppDesign.error,
-                ),
+                style: AppDesign.captionStyle.copyWith(color: AppDesign.error),
               ),
             ],
           ],
@@ -939,46 +911,28 @@ Reject if:
     return InputDecoration(
       labelText: label,
       errorText: label == "إجمالي عدد القطع" ? itemCountError : null,
-      prefixIcon: Icon(
-        icon,
-        color: AppDesign.primary,
-      ),
+      prefixIcon: Icon(icon, color: AppDesign.primary),
       filled: true,
       fillColor: AppDesign.surface,
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(AppDesign.radiusLG),
-        borderSide: const BorderSide(
-          color: AppDesign.border,
-          width: 1,
-        ),
+        borderSide: const BorderSide(color: AppDesign.border, width: 1),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(AppDesign.radiusLG),
-        borderSide: const BorderSide(
-          color: AppDesign.primary,
-          width: 1.2,
-        ),
+        borderSide: const BorderSide(color: AppDesign.primary, width: 1.2),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(AppDesign.radiusLG),
-        borderSide: const BorderSide(
-          color: AppDesign.error,
-          width: 1,
-        ),
+        borderSide: const BorderSide(color: AppDesign.error, width: 1),
       ),
       focusedErrorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(AppDesign.radiusLG),
-        borderSide: const BorderSide(
-          color: AppDesign.error,
-          width: 1.2,
-        ),
+        borderSide: const BorderSide(color: AppDesign.error, width: 1.2),
       ),
       disabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(AppDesign.radiusLG),
-        borderSide: const BorderSide(
-          color: AppDesign.border,
-          width: 1,
-        ),
+        borderSide: const BorderSide(color: AppDesign.border, width: 1),
       ),
     );
   }
@@ -991,9 +945,7 @@ Reject if:
         appBar: AppBar(
           title: Text(
             'تعديل التبرع',
-            style: AppDesign.h2Style.copyWith(
-              color: AppDesign.textPrimary,
-            ),
+            style: AppDesign.h2Style.copyWith(color: AppDesign.textPrimary),
           ),
           centerTitle: true,
           backgroundColor: AppDesign.background,
@@ -1053,19 +1005,21 @@ Reject if:
                       onChanged: inputsLocked
                           ? null
                           : (v) => setState(() {
-                                selectedAgeGroup = v;
-                                changesSaved = false;
+                              selectedAgeGroup = v;
+                              changesSaved = false;
 
-                                if (!ageNeedsSize()) {
-                                  generalSize = null;
-                                }
-                              }),
+                              if (!ageNeedsSize()) {
+                                generalSize = null;
+                              }
+                            }),
                     ),
 
                     if (ageNeedsSize()) ...[
                       AppGap.lg,
                       DropdownButtonFormField<String>(
-                          value: sizeRanges.contains(generalSize) ? generalSize : null,
+                        value: sizeRanges.contains(generalSize)
+                            ? generalSize
+                            : null,
                         decoration: _sharedInputDecoration(
                           label: "المقاس",
                           icon: Icons.straighten,
@@ -1092,11 +1046,13 @@ Reject if:
                     TextField(
                       controller: _itemCountController,
                       keyboardType: TextInputType.number,
-                      onChanged: inputsLocked ? null : _updateItemCount,
+                      onEditingComplete: () {
+                        if (!inputsLocked) {
+                          _updateItemCount(_itemCountController.text);
+                        }
+                      },
                       enabled: !inputsLocked,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                      ],
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       decoration: _sharedInputDecoration(
                         label: "إجمالي عدد القطع",
                         icon: Icons.format_list_numbered_rounded,
@@ -1122,11 +1078,11 @@ Reject if:
                             itemCount: totalBoxes,
                             gridDelegate:
                                 const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 3,
-                              mainAxisSpacing: AppDesign.spaceMD,
-                              crossAxisSpacing: AppDesign.spaceMD,
-                              childAspectRatio: 1,
-                            ),
+                                  crossAxisCount: 3,
+                                  mainAxisSpacing: AppDesign.spaceMD,
+                                  crossAxisSpacing: AppDesign.spaceMD,
+                                  childAspectRatio: 1,
+                                ),
                             itemBuilder: (context, idx) {
                               final boxNum = idx + 1;
                               return _buildBoxTile(boxNum);
@@ -1165,9 +1121,8 @@ Reject if:
                           ),
                           AppGap.sm,
                           ...boxes[openedBox]!.asMap().entries.map(
-                                (entry) =>
-                                    _buildItemCard(entry.key, entry.value),
-                              ),
+                            (entry) => _buildItemCard(entry.key, entry.value),
+                          ),
                           AppGap.md,
                           SizedBox(
                             width: double.infinity,
@@ -1185,7 +1140,8 @@ Reject if:
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: savedBoxes.length == totalBoxes &&
+                          onPressed:
+                              savedBoxes.length == totalBoxes &&
                                   totalBoxes > 0 &&
                                   !isSaving &&
                                   !changesSaved
@@ -1207,8 +1163,8 @@ Reject if:
                         width: double.infinity,
                         child: ElevatedButton(
                           onPressed: changesSaved && !isSaving
-                            ? () => Navigator.pop(context, true)
-                            : null,
+                              ? () => Navigator.pop(context, true)
+                              : null,
                           child: const Text("تم"),
                         ),
                       ),
