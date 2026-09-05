@@ -9,13 +9,9 @@ class WelcomePage extends StatelessWidget {
     return Scaffold(
       body: Stack(
         children: [
-
           // Background Image
           Positioned.fill(
-            child: Image.asset(
-              'assets/images/madad.jpeg',
-              fit: BoxFit.cover,
-            ),
+            child: Image.asset('assets/images/madad.jpeg', fit: BoxFit.cover),
           ),
 
           // Gradient overlay for better button visibility
@@ -25,10 +21,7 @@ class WelcomePage extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Color.fromARGB(120, 0, 0, 0),
-                  ],
+                  colors: [Colors.transparent, Color.fromARGB(120, 0, 0, 0)],
                 ),
               ),
             ),
@@ -40,7 +33,6 @@ class WelcomePage extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 30),
               child: Column(
                 children: [
-
                   const Spacer(),
 
                   // Login Button
@@ -69,11 +61,28 @@ class WelcomePage extends StatelessWidget {
                       onPressed: () {
                         Navigator.pushNamed(context, '/signup');
                       },
-                      child: const Text("إنشاء حساب"),
+                      child: const Text("إنشاء حساب متبرع"),
                     ),
                   ),
 
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 20),
+
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    margin: const EdgeInsets.only(bottom: 20),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      " لأننا نهتم بوصول الدعم لمستحقيه， يتم تسجيل حسابات المستفيدين عبر التواصل المباشر معنا عبر البريد البريد الإلكتروني التالي                                                                           MadadTeam@gmail.com ",
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
