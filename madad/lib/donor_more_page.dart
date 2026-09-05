@@ -7,10 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 class DonorMorePage extends StatefulWidget {
   final String userId;
 
-  const DonorMorePage({
-    super.key,
-    required this.userId,
-  });
+  const DonorMorePage({super.key, required this.userId});
 
   @override
   State<DonorMorePage> createState() => _DonorMorePageState();
@@ -58,26 +55,22 @@ class _DonorMorePageState extends State<DonorMorePage> {
   }
 
   Future<void> _showLogoutDialog() async {
-  final confirm = await AppDesign.showAppDialog(
-    context: context,
-    title: 'تسجيل الخروج',
-    message: 'هل أنت متأكد من تسجيل الخروج؟',
-    confirmText: 'تسجيل الخروج',
-    cancelText: 'إلغاء',
-  );
+    final confirm = await AppDesign.showAppDialog(
+      context: context,
+      title: 'تسجيل الخروج',
+      message: 'هل أنت متأكد من تسجيل الخروج؟',
+      confirmText: 'تسجيل الخروج',
+      cancelText: 'إلغاء',
+    );
 
-  if (!confirm) return;
+    if (!confirm) return;
 
-  await FirebaseAuth.instance.signOut();
+    await FirebaseAuth.instance.signOut();
 
-  if (!mounted) return;
+    if (!mounted) return;
 
-  Navigator.pushNamedAndRemoveUntil(
-    context,
-    '/',
-    (route) => false,
-  );
-}
+    Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -124,10 +117,7 @@ class _DonorMorePageState extends State<DonorMorePage> {
     return SizedBox(
       width: double.infinity,
       height: 150,
-      child: Image.asset(
-        'assets/images/madad_identity.png',
-        fit: BoxFit.cover,
-      ),
+      child: Image.asset('assets/images/madad_identity.png', fit: BoxFit.cover),
     );
   }
 
@@ -260,11 +250,7 @@ class _DonorMorePageState extends State<DonorMorePage> {
             endIndent: 12,
           ),
         ),
-        Icon(
-          Icons.local_florist_outlined,
-          color: AppDesign.primary,
-          size: 30,
-        ),
+        Icon(Icons.local_florist_outlined, color: AppDesign.primary, size: 30),
         Expanded(
           child: Divider(
             color: AppDesign.primary.withOpacity(0.35),
@@ -276,207 +262,188 @@ class _DonorMorePageState extends State<DonorMorePage> {
     );
   }
 
-Widget _buildAboutMadadCard() {
-  return Container(
-    width: double.infinity,
-    padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
-    decoration: _cardDecoration(),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
+  Widget _buildAboutMadadCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
+      decoration: _cardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ===== عنوان حول مدد =====
+          Row(
+            textDirection: TextDirection.rtl,
+            children: [
+              _circleIcon(Icons.info_outline_rounded),
+              const SizedBox(width: 12),
 
-        // ===== عنوان حول مدد =====
-        Row(
-          textDirection: TextDirection.rtl,
-          children: [
-            _circleIcon(Icons.info_outline_rounded),
-            const SizedBox(width: 12),
-
-            Text(
-              'حول مدد',
-              style: AppDesign.h1Style.copyWith(
-                color: AppDesign.primary,
-                fontSize: 24,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
-        ),
-
-        const SizedBox(height: 18),
-
-        Divider(
-          color: AppDesign.border,
-          thickness: 1,
-        ),
-
-        const SizedBox(height: 20),
-
-        // ===== موقع المستودع =====
-        Row(
-          textDirection: TextDirection.rtl,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-
-            // أيقونة يمين
-            _circleIcon(Icons.storefront_outlined),
-
-            const SizedBox(width: 14),
-
-            // النص
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      'موقع المستودع',
-                      textAlign: TextAlign.right,
-                      style: AppDesign.subtitleStyle.copyWith(
-                        color: AppDesign.textPrimary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 4),
-
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      'مستودع مدد - واجهة الرياض',
-                      textAlign: TextAlign.right,
-                      style: AppDesign.bodyStyle.copyWith(
-                        color: AppDesign.textSecondary,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(width: 12),
-
-            // زر الخريطة يسار
-            SizedBox(
-              height: 48,
-              width: 140,
-              child: OutlinedButton.icon(
-                onPressed: () async {
-                  const String googleMapUrl =
-                      'https://www.google.com/maps/search/?api=1&query=24.768932,46.728328';
-
-                  final Uri url = Uri.parse(googleMapUrl);
-
-                  if (await canLaunchUrl(url)) {
-                    await launchUrl(
-                      url,
-                      mode: LaunchMode.externalApplication,
-                    );
-                  }
-                },
-
-                icon: Icon(
-                  Icons.location_on_outlined,
+              Text(
+                'حول مدد',
+                style: AppDesign.h1Style.copyWith(
                   color: AppDesign.primary,
-                  size: 18,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
                 ),
+              ),
+            ],
+          ),
 
-                label: Text(
-                  'فتح الخريطة',
-                  style: AppDesign.bodyStyle.copyWith(
+          const SizedBox(height: 18),
+
+          Divider(color: AppDesign.border, thickness: 1),
+
+          const SizedBox(height: 20),
+
+          // ===== موقع المستودع =====
+          Row(
+            textDirection: TextDirection.rtl,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // أيقونة يمين
+              _circleIcon(Icons.storefront_outlined),
+
+              const SizedBox(width: 14),
+
+              // النص
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        'موقع المستودع',
+                        textAlign: TextAlign.right,
+                        style: AppDesign.subtitleStyle.copyWith(
+                          color: AppDesign.textPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 4),
+
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        'مستودع مدد - واجهة الرياض',
+                        textAlign: TextAlign.right,
+                        style: AppDesign.bodyStyle.copyWith(
+                          color: AppDesign.textSecondary,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(width: 12),
+
+              // زر الخريطة يسار
+              SizedBox(
+                height: 48,
+                width: 140,
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    final Uri url = Uri.parse(
+                      'https://www.google.com/maps/search/?api=1&query=24.768932,46.728328',
+                    );
+
+                    await launchUrl(url, mode: LaunchMode.externalApplication);
+                  },
+
+                  icon: Icon(
+                    Icons.location_on_outlined,
                     color: AppDesign.primary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-
-                style: OutlinedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  elevation: 0,
-
-                  side: BorderSide(
-                    color: AppDesign.primary.withOpacity(0.45),
-                    width: 1.2,
+                    size: 18,
                   ),
 
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(
-                      AppDesign.radiusLG,
+                  label: Text(
+                    'فتح الخريطة',
+                    style: AppDesign.bodyStyle.copyWith(
+                      color: AppDesign.primary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    elevation: 0,
+
+                    side: BorderSide(
+                      color: AppDesign.primary.withOpacity(0.45),
+                      width: 1.2,
+                    ),
+
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppDesign.radiusLG),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
 
-        const SizedBox(height: 20),
+          const SizedBox(height: 20),
 
-        Divider(
-          color: AppDesign.border,
-          thickness: 1,
-        ),
+          Divider(color: AppDesign.border, thickness: 1),
 
-        const SizedBox(height: 20),
+          const SizedBox(height: 20),
 
-        // ===== ساعات العمل =====
-        Row(
-          textDirection: TextDirection.rtl,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+          // ===== ساعات العمل =====
+          Row(
+            textDirection: TextDirection.rtl,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // أيقونة يمين
+              _circleIcon(Icons.access_time_rounded),
 
-            // أيقونة يمين
-            _circleIcon(Icons.access_time_rounded),
+              const SizedBox(width: 14),
 
-            const SizedBox(width: 14),
-
-            // النص
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      'ساعات العمل',
-                      textAlign: TextAlign.right,
-                      style: AppDesign.subtitleStyle.copyWith(
-                        color: AppDesign.textPrimary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
+              // النص
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        'ساعات العمل',
+                        textAlign: TextAlign.right,
+                        style: AppDesign.subtitleStyle.copyWith(
+                          color: AppDesign.textPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
-                  ),
 
-                  const SizedBox(height: 6),
+                    const SizedBox(height: 6),
 
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      'الأحد - الخميس: 9:00 ص - 5:00 م\nالجمعة والسبت: مغلق',
-                      textAlign: TextAlign.right,
-                      style: AppDesign.bodyStyle.copyWith(
-                        color: AppDesign.textSecondary,
-                        fontSize: 13,
-                        height: 1.7,
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        'الأحد - الخميس: 9:00 ص - 5:00 م\nالجمعة والسبت: مغلق',
+                        textAlign: TextAlign.right,
+                        style: AppDesign.bodyStyle.copyWith(
+                          color: AppDesign.textSecondary,
+                          fontSize: 13,
+                          height: 1.7,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
-      ],
-    ),
-  );
-}
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _circleIcon(IconData icon) {
     return Container(
@@ -575,13 +542,22 @@ Widget _buildAboutMadadCard() {
             label: 'الرئيسية',
           ),
           NavigationDestination(
-            icon: Icon(Icons.volunteer_activism_outlined, color: AppDesign.primary),
-            selectedIcon: Icon(Icons.volunteer_activism_rounded, color: AppDesign.primary),
+            icon: Icon(
+              Icons.volunteer_activism_outlined,
+              color: AppDesign.primary,
+            ),
+            selectedIcon: Icon(
+              Icons.volunteer_activism_rounded,
+              color: AppDesign.primary,
+            ),
             label: 'تبرعاتي',
           ),
           NavigationDestination(
             icon: Icon(Icons.more_horiz_rounded, color: AppDesign.primary),
-            selectedIcon: Icon(Icons.more_horiz_rounded, color: AppDesign.primary),
+            selectedIcon: Icon(
+              Icons.more_horiz_rounded,
+              color: AppDesign.primary,
+            ),
             label: 'المزيد',
           ),
         ],
