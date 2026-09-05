@@ -5,10 +5,7 @@ import 'app_design.dart';
 class DonorHomePage extends StatefulWidget {
   final String userId;
 
-  const DonorHomePage({
-    super.key,
-    required this.userId,
-  });
+  const DonorHomePage({super.key, required this.userId});
 
   @override
   State<DonorHomePage> createState() => _DonorHomePageState();
@@ -44,11 +41,11 @@ class _DonorHomePageState extends State<DonorHomePage> {
           .doc(widget.userId)
           .get();
 
-      final donationsFuture =
-          FirebaseFirestore.instance.collection('donations').get();
+      final donationsFuture = FirebaseFirestore.instance
+          .collection('donations')
+          .get();
 
-      final usersFuture =
-          FirebaseFirestore.instance.collection('Users').get();
+      final usersFuture = FirebaseFirestore.instance.collection('Users').get();
 
       final results = await Future.wait([
         userFuture,
@@ -61,8 +58,7 @@ class _DonorHomePageState extends State<DonorHomePage> {
       final userDoc = results[0] as DocumentSnapshot<Map<String, dynamic>>;
       final donationsSnapshot =
           results[1] as QuerySnapshot<Map<String, dynamic>>;
-      final usersSnapshot =
-          results[2] as QuerySnapshot<Map<String, dynamic>>;
+      final usersSnapshot = results[2] as QuerySnapshot<Map<String, dynamic>>;
 
       String fetchedUserName = 'مستخدم';
 
@@ -165,8 +161,9 @@ class _DonorHomePageState extends State<DonorHomePage> {
   }
 
   Widget _buildHeader() {
-    final String firstLetter =
-        userName.trim().isNotEmpty ? userName.trim()[0] : 'م';
+    final String firstLetter = userName.trim().isNotEmpty
+        ? userName.trim()[0]
+        : 'م';
 
     return Row(
       children: [
@@ -364,8 +361,7 @@ class _DonorHomePageState extends State<DonorHomePage> {
                       foregroundColor: AppDesign.white,
                       elevation: 0,
                       shape: RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(AppDesign.radiusXL),
+                        borderRadius: BorderRadius.circular(AppDesign.radiusXL),
                       ),
                     ),
                     child: Text(
@@ -504,8 +500,10 @@ class _DonorHomePageState extends State<DonorHomePage> {
           ),
           NavigationDestination(
             icon: Icon(Icons.more_horiz_rounded, color: AppDesign.primary),
-            selectedIcon:
-                Icon(Icons.more_horiz_rounded, color: AppDesign.primary),
+            selectedIcon: Icon(
+              Icons.more_horiz_rounded,
+              color: AppDesign.primary,
+            ),
             label: 'المزيد',
           ),
         ],
@@ -590,11 +588,7 @@ class _DonationCard extends StatelessWidget {
                 child: CircleAvatar(
                   radius: 22,
                   backgroundColor: AppDesign.white.withOpacity(0.14),
-                  child: Icon(
-                    data.icon,
-                    color: data.titleColor,
-                    size: 24,
-                  ),
+                  child: Icon(data.icon, color: data.titleColor, size: 24),
                 ),
               ),
               const SizedBox(height: 18),
@@ -650,9 +644,7 @@ class _StatCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppDesign.white,
         borderRadius: BorderRadius.circular(AppDesign.radiusXL),
-        border: Border.all(
-          color: AppDesign.border,
-        ),
+        border: Border.all(color: AppDesign.border),
         boxShadow: [
           BoxShadow(
             color: AppDesign.black.withOpacity(0.05),
@@ -670,11 +662,7 @@ class _StatCard extends StatelessWidget {
               color: AppDesign.secondary.withOpacity(0.14),
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              icon,
-              color: AppDesign.primary,
-              size: 21,
-            ),
+            child: Icon(icon, color: AppDesign.primary, size: 21),
           ),
           AppGap.wMD,
           Expanded(
