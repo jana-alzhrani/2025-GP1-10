@@ -10,7 +10,7 @@ class AppDesign {
   static const Color secondary = Color(0xFF8AA7B0);
   static const Color softGreen = Color(0xFF8AA495);
 
-  static const Color background = Color.fromARGB(255,242,247,248);
+  static const Color background = Color.fromARGB(255, 242, 247, 248);
   static const Color surface = Color(0xFFFFFFFF);
   static const Color surfaceAlt = Color(0xFFF7FAFB);
   static const Color border = Color(0xFFE3EAEC);
@@ -22,7 +22,7 @@ class AppDesign {
   static const Color black = Color(0xFF000000);
 
   static const Color error = Color.fromARGB(255, 80, 53, 53);
-  
+
   static const Color success = Color.fromARGB(255, 36, 63, 37);
   static const Color warning = Color.fromARGB(255, 248, 219, 173);
 
@@ -229,10 +229,7 @@ class AppDesign {
         height: lineHeight,
         color: textPrimary,
       ),
-      iconTheme: IconThemeData(
-        color: textPrimary,
-        size: iconMD,
-      ),
+      iconTheme: IconThemeData(color: textPrimary, size: iconMD),
     ),
 
     cardTheme: CardThemeData(
@@ -350,16 +347,9 @@ class AppDesign {
       ),
     ),
 
-    dividerTheme: const DividerThemeData(
-      color: border,
-      thickness: 1,
-      space: 1,
-    ),
+    dividerTheme: const DividerThemeData(color: border, thickness: 1, space: 1),
 
-    iconTheme: const IconThemeData(
-      color: primary,
-      size: iconMD,
-    ),
+    iconTheme: const IconThemeData(color: primary, size: iconMD),
 
     floatingActionButtonTheme: const FloatingActionButtonThemeData(
       backgroundColor: primary,
@@ -395,242 +385,197 @@ class AppDesign {
         height: lineHeight,
         color: white,
       ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
     ),
   );
 
-static Future<bool> showAppDialog({
-  required BuildContext context,
-  required String title,
-  required String message,
-  String confirmText = 'نعم',
-  String cancelText = 'إلغاء',
-}) async {
-  return await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          backgroundColor: const Color(0xFFF7FAFB),
-          surfaceTintColor: Colors.transparent,
-          elevation: 0,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 70),
+  static Future<bool> showAppDialog({
+    required BuildContext context,
+    required String title,
+    required String message,
+    String confirmText = 'نعم',
+    String cancelText = 'إلغاء',
+  }) async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            backgroundColor: const Color(0xFFF7FAFB),
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            insetPadding: const EdgeInsets.symmetric(horizontal: 70),
 
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
 
-          contentPadding: EdgeInsets.zero,
+            contentPadding: EdgeInsets.zero,
 
-          content: SizedBox(
-            width: 230,
-            height: 175,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(18, 20, 18, 14),
-              child: Column(
-                children: [
-                  Text(
-                    title,
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontFamily: AppDesign.fontFamily,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.black,
-                    ),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  Expanded(
-                    child: Center(
-                      child: Text(
-                        message,
-                        textAlign: TextAlign.center,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontFamily: AppDesign.fontFamily,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w400,
-                          color: Colors.black,
-                          height: 1.15,
-                        ),
+            content: SizedBox(
+              width: 230,
+              height: 175,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(18, 20, 18, 14),
+                child: Column(
+                  children: [
+                    Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: AppDesign.fontFamily,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.black,
                       ),
                     ),
-                  ),
 
-                  const SizedBox(height: 8),
+                    const SizedBox(height: 12),
 
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(dialogContext, false),
+                    Expanded(
+                      child: Center(
                         child: Text(
-                          cancelText,
+                          message,
+                          textAlign: TextAlign.center,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontFamily: AppDesign.fontFamily,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
                             color: Colors.black,
+                            height: 1.15,
                           ),
                         ),
                       ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(dialogContext, true),
-                        child: Text(
-                          confirmText,
-                          style: const TextStyle(
-                            fontFamily: AppDesign.fontFamily,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.black,
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(dialogContext, false),
+                          child: Text(
+                            cancelText,
+                            style: const TextStyle(
+                              fontFamily: AppDesign.fontFamily,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.black,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                        TextButton(
+                          onPressed: () => Navigator.pop(dialogContext, true),
+                          child: Text(
+                            confirmText,
+                            style: const TextStyle(
+                              fontFamily: AppDesign.fontFamily,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.black,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
+        ) ??
+        false;
+  }
+
+  static void showSuccessSnackBar(
+    BuildContext context,
+    String message, {
+    Duration duration = const Duration(seconds: 2),
+  }) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Text(message, textAlign: TextAlign.right),
         ),
-      ) ??
-      false;
-}      static void showSuccessSnackBar(
-  BuildContext context,
-  String message, {
-  Duration duration = const Duration(seconds: 2),
-}) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Directionality(
-  textDirection: TextDirection.rtl,
-  child: Text(
-    message,
-    textAlign: TextAlign.right,
-  ),
-),
-      duration: duration,
-      backgroundColor: success,
-      behavior: SnackBarBehavior.floating,
-      padding: const EdgeInsets.symmetric(
-        horizontal: 14,
-        vertical: 8,
+        duration: duration,
+        backgroundColor: success,
+        behavior: SnackBarBehavior.floating,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        margin: const EdgeInsets.fromLTRB(16, 16, 16, 70),
       ),
-      margin: const EdgeInsets.fromLTRB(
-        16,
-        16,
-        16,
-        70,
+    );
+  }
+
+  static void showErrorSnackBar(
+    BuildContext context,
+    String message, {
+    Duration duration = const Duration(seconds: 2),
+  }) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Text(message, textAlign: TextAlign.right),
+        ),
+        duration: duration,
+        backgroundColor: primary,
+        behavior: SnackBarBehavior.floating,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+
+        margin: const EdgeInsets.fromLTRB(16, 16, 16, 70),
       ),
-    ),
-  );
+    );
+  }
+
+  static void showImageValidSnackBar(
+    BuildContext context,
+    String message, {
+    Duration duration = const Duration(seconds: 2),
+  }) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: duration,
+
+        backgroundColor: Colors.green.shade700,
+
+        behavior: SnackBarBehavior.floating,
+
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+
+        margin: const EdgeInsets.fromLTRB(16, 16, 16, 70),
+      ),
+    );
+  }
+
+  static void showImageInvalidSnackBar(
+    BuildContext context,
+    String message, {
+    Duration duration = const Duration(seconds: 2),
+  }) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Text(message, textAlign: TextAlign.right),
+        ),
+        duration: duration,
+
+        backgroundColor: Colors.red.shade700,
+
+        behavior: SnackBarBehavior.floating,
+
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+
+        margin: const EdgeInsets.fromLTRB(16, 16, 16, 70),
+      ),
+    );
+  }
 }
-
-static void showErrorSnackBar(
-  BuildContext context,
-  String message, {
-  Duration duration = const Duration(seconds: 2),
-}) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Directionality(
-  textDirection: TextDirection.rtl,
-  child: Text(
-    message,
-    textAlign: TextAlign.right,
-  ),
-),
-      duration: duration,
-      backgroundColor: primary,
-      behavior: SnackBarBehavior.floating,
-      padding: const EdgeInsets.symmetric(
-      horizontal: 14,
-      vertical: 8,
-      ),  
-
-      margin: const EdgeInsets.fromLTRB(
-        16,
-        16,
-        16,
-        70,
-      ),
-    ),
-  );
-}
-
-static void showImageValidSnackBar(
-  BuildContext context,
-  String message, {
-  Duration duration = const Duration(seconds: 2),
-}) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(message),
-      duration: duration,
-
-      backgroundColor: Colors.green.shade700,
-
-      behavior: SnackBarBehavior.floating,
-
-      padding: const EdgeInsets.symmetric(
-        horizontal: 14,
-        vertical: 8,
-      ),
-
-      margin: const EdgeInsets.fromLTRB(
-        16,
-        16,
-        16,
-        70,
-      ),
-    ),
-  );
-}
-
-static void showImageInvalidSnackBar(
-  BuildContext context,
-  String message, {
-  Duration duration = const Duration(seconds: 2),
-}) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-     content: Directionality(
-  textDirection: TextDirection.rtl,
-  child: Text(
-    message,
-    textAlign: TextAlign.right,
-  ),
-),
-      duration: duration,
-
-      backgroundColor: Colors.red.shade700,
-
-      behavior: SnackBarBehavior.floating,
-
-      padding: const EdgeInsets.symmetric(
-        horizontal: 14,
-        vertical: 8,
-      ),
-
-      margin: const EdgeInsets.fromLTRB(
-        16,
-        16,
-        16,
-        70,
-      ),
-    ),
-  );
-}
-
-}
-
-
-
 
 // =========================
 // Gaps
@@ -693,6 +638,3 @@ class AppSizes {
   static const double iconMedium = AppDesign.iconMD;
   static const double iconLarge = AppDesign.iconLG;
 }
-
-
-  
