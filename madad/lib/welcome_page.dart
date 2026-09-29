@@ -59,7 +59,7 @@ class WelcomePage extends StatelessWidget {
                         side: const BorderSide(color: Colors.white, width: 1.5),
                       ),
                       onPressed: () {
-                        Navigator.pushNamed(context, '/signup');
+                        Navigator.pushNamed(context, '/roleSelection');
                       },
                       child: const Text("إنشاء حساب"),
                     ),
