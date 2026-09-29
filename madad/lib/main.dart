@@ -6,6 +6,7 @@ import 'package:madad_app/firebase_options.dart';
 import 'auth_gate.dart';
 import 'welcome_page.dart';
 import 'login_page.dart';
+import 'role_selection_page.dart';
 import 'signup_page.dart';
 import 'donor_home_page.dart';
 import 'view_donation_page.dart';
@@ -41,6 +42,7 @@ class MyApp extends StatelessWidget {
 
       routes: {
         '/login': (context) => const LoginPage(),
+        '/roleSelection': (context) => const RoleSelectionPage(),
         '/signup': (context) => SignUpPage(),
         '/welcome': (context) => const WelcomePage(),
 
