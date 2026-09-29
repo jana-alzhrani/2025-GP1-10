@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'donor_home_page.dart';
 import 'beneficiary_home_page.dart';
+import 'courier_home_page.dart';
 import 'welcome_page.dart';
 
 class AuthGate extends StatelessWidget {
@@ -35,8 +36,9 @@ class AuthGate extends StatelessWidget {
         return BeneficiaryHomePage(userId: userId);
       } else if (role == 'donor') {
         return DonorHomePage(userId: userId);
+      } else if (role == 'courier') {
+        return CourierHomePage(userId: userId);
       } else {
-        // لو فيه خطأ في البيانات
         return const WelcomePage();
       }
     } catch (e) {
