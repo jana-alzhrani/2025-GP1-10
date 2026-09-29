@@ -4,8 +4,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'donor_home_page.dart';
 import 'beneficiary_home_page.dart';
-import 'courier_home_page.dart';
 import 'welcome_page.dart';
+import 'admin_home_page.dart';
+import 'courier_home_page.dart';
 
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
@@ -31,11 +32,12 @@ class AuthGate extends StatelessWidget {
 
       final data = doc.data()!;
       final role = (data['role'] ?? '').toString().trim().toLowerCase();
-
       if (role == 'beneficiary') {
         return BeneficiaryHomePage(userId: userId);
       } else if (role == 'donor') {
         return DonorHomePage(userId: userId);
+      } else if (role == 'admin') {
+        return AdminHomePage(userId: userId);
       } else if (role == 'courier') {
         return CourierHomePage(userId: userId);
       } else {
