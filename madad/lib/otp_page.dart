@@ -8,8 +8,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'donor_home_page.dart';
 import 'Beneficiary_home_page.dart';
-import 'app_design.dart';
 import 'admin_home_page.dart';
+import 'courier_home_page.dart';
+import 'app_design.dart';
 
 class OtpPage extends StatefulWidget {
   String correctCode;
@@ -201,24 +202,126 @@ class _OtpPageState extends State<OtpPage> {
 
       final uid = currentUser.uid;
 
-      final userRef = FirebaseFirestore.instance.collection('Users').doc(uid);
+      final users = FirebaseFirestore.instance.collection('Users');
 
+      // =====================================================
+      // تسجيل الدخول: البحث عن الحساب برقم الجوال
+      // =====================================================
+      if (widget.isLogin) {
+        final localPhone = widget.phone.trim();
+        final internationalPhone = formatPhoneNumber(widget.phone);
+
+        QuerySnapshot<Map<String, dynamic>> userCheck = await users
+            .where('phone', isEqualTo: localPhone)
+            .limit(1)
+            .get();
+
+        // البحث عن الرقم بالصيغة الدولية في حقل phone
+        if (userCheck.docs.isEmpty) {
+          userCheck = await users
+              .where('phone', isEqualTo: internationalPhone)
+              .limit(1)
+              .get();
+        }
+
+        // البحث في phoneNumber بالصيغة الدولية
+        if (userCheck.docs.isEmpty) {
+          userCheck = await users
+              .where('phoneNumber', isEqualTo: internationalPhone)
+              .limit(1)
+              .get();
+        }
+
+        // البحث في phoneNumber بالصيغة المحلية
+        if (userCheck.docs.isEmpty) {
+          userCheck = await users
+              .where('phoneNumber', isEqualTo: localPhone)
+              .limit(1)
+              .get();
+        }
+
+        // رفض الدخول إذا لم يوجد سجل مطابق
+        if (userCheck.docs.isEmpty) {
+          await FirebaseAuth.instance.signOut();
+
+          if (mounted) {
+            AppDesign.showErrorSnackBar(
+              context,
+              'رقم الجوال غير مرتبط بحساب مسجل',
+            );
+          }
+          return;
+        }
+
+        // استخدام معرّف سجل Firestore الموجود بالفعل
+        final matchedUser = userCheck.docs.first;
+        final userData = matchedUser.data();
+        final appUserId = matchedUser.id;
+
+        final role = (userData['role'] ?? '').toString().trim().toLowerCase();
+
+        if (!mounted) return;
+
+        if (role == 'courier') {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(
+              builder: (_) => CourierHomePage(userId: appUserId),
+            ),
+            (route) => false,
+          );
+        } else if (role == 'donor') {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => DonorHomePage(userId: appUserId)),
+            (route) => false,
+          );
+        } else if (role == 'beneficiary') {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(
+              builder: (_) => BeneficiaryHomePage(userId: appUserId),
+            ),
+            (route) => false,
+          );
+        } else if (role == 'admin') {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => AdminHomePage(userId: appUserId)),
+            (route) => false,
+          );
+        } else {
+          await FirebaseAuth.instance.signOut();
+
+          if (mounted) {
+            AppDesign.showErrorSnackBar(context, 'نوع الحساب غير معروف');
+          }
+        }
+
+        return;
+      }
+
+      // =====================================================
+      // إنشاء حساب جديد: المتبرع أو المستفيد فقط
+      // =====================================================
+      final userRef = users.doc(uid);
       final userDoc = await userRef.get();
 
-      // إنشاء الحساب إذا لم يكن موجوداً
       if (!userDoc.exists) {
         final role = widget.role.trim().toLowerCase();
 
         if (role != 'donor' && role != 'beneficiary') {
+          await FirebaseAuth.instance.signOut();
+
           if (mounted) {
             AppDesign.showErrorSnackBar(context, 'نوع الحساب غير معروف');
           }
           return;
         }
 
-        // رفع ملف الضمان بعد نجاح التحقق من رقم الجوال
         String? uploadedPdfUrl = widget.socialSecurityPdfUrl;
 
+        // رفع ملف الضمان للمستفيد بعد التحقق من رقم الجوال
         if (role == 'beneficiary') {
           final pdfBytes = widget.socialSecurityPdfBytes;
 
@@ -286,7 +389,9 @@ class _OtpPageState extends State<OtpPage> {
         return;
       }
 
-      // الحساب موجود مسبقاً: التوجيه حسب الدور المسجل في Firestore
+      // =====================================================
+      // إذا كان حساب التسجيل موجودًا مسبقًا
+      // =====================================================
       final userData = userDoc.data() ?? {};
 
       final role = (userData['role'] ?? '').toString().trim().toLowerCase();
@@ -356,7 +461,7 @@ class _OtpPageState extends State<OtpPage> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // صورة وشعار مدد
+            // صورة وشعار مداد
             Stack(
               children: [
                 Container(
