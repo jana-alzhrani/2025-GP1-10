@@ -15,13 +15,12 @@ import 'app_design.dart';
 import 'Beneficiary_home_page.dart';
 import 'add_donation_page.dart';
 import 'delivery_method_page.dart';
+import 'courier_home_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   runApp(const MyApp());
 }
@@ -47,53 +46,62 @@ class MyApp extends StatelessWidget {
         '/welcome': (context) => const WelcomePage(),
 
         '/donorHome': (context) {
-  final uid =
-      (ModalRoute.of(context)?.settings.arguments as String?) ??
-      FirebaseAuth.instance.currentUser?.uid ??
-      '';
+          final uid =
+              (ModalRoute.of(context)?.settings.arguments as String?) ??
+              FirebaseAuth.instance.currentUser?.uid ??
+              '';
 
-  return DonorHomePage( userId: uid);
-},
+          return DonorHomePage(userId: uid);
+        },
 
         '/beneficiaryHome': (context) {
           final uid =
-              (ModalRoute.of(context)?.settings.arguments as String?) ??
-                  userId;
+              (ModalRoute.of(context)?.settings.arguments as String?) ?? userId;
 
           return BeneficiaryHomePage(userId: uid);
         },
 
-'/addDonation': (context) {
-  final uid =
-      (ModalRoute.of(context)?.settings.arguments as String?) ??
-      FirebaseAuth.instance.currentUser?.uid ??
-      '';
+        '/addDonation': (context) {
+          final uid =
+              (ModalRoute.of(context)?.settings.arguments as String?) ??
+              FirebaseAuth.instance.currentUser?.uid ??
+              '';
 
-  return AddDonationPage(userId: uid);
-},        '/viewDonation': (context) {
-        final uid =
-            (ModalRoute.of(context)?.settings.arguments as String?) ??
-            FirebaseAuth.instance.currentUser?.uid ??
-            '';
+          return AddDonationPage(userId: uid);
+        },
+        '/viewDonation': (context) {
+          final uid =
+              (ModalRoute.of(context)?.settings.arguments as String?) ??
+              FirebaseAuth.instance.currentUser?.uid ??
+              '';
 
-        return ViewDonationPage(userId: uid);
-      },
+          return ViewDonationPage(userId: uid);
+        },
 
-      '/donorMore': (context) {
-        final uid =
-            (ModalRoute.of(context)?.settings.arguments as String?) ??
-            FirebaseAuth.instance.currentUser?.uid ??
-            '';
+        '/donorMore': (context) {
+          final uid =
+              (ModalRoute.of(context)?.settings.arguments as String?) ??
+              FirebaseAuth.instance.currentUser?.uid ??
+              '';
 
-        return DonorMorePage(userId: uid);
-      },
+          return DonorMorePage(userId: uid);
+        },
 
-      '/deliveryMethod': (context) {
-  final donationId =
-      ModalRoute.of(context)?.settings.arguments as String? ?? '';
+        '/deliveryMethod': (context) {
+          final donationId =
+              ModalRoute.of(context)?.settings.arguments as String? ?? '';
 
-  return DeliveryMethodPage(donationId: donationId);
-},
+          return DeliveryMethodPage(donationId: donationId);
+        },
+
+        '/courierHome': (context) {
+          final uid =
+              (ModalRoute.of(context)?.settings.arguments as String?) ??
+              FirebaseAuth.instance.currentUser?.uid ??
+              '';
+
+          return CourierHomePage(userId: uid);
+        },
       },
     );
   }
