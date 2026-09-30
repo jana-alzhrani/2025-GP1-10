@@ -33,7 +33,6 @@ class _CourierHomePageState extends State<CourierHomePage> {
           .doc(widget.userId)
           .get();
 
-      // جلب المهام المكتملة مباشرة من جدول donations للمندوب الحالي
       final tasksSnapshot = await FirebaseFirestore.instance
           .collection('donations')
           .where('courierID', isEqualTo: widget.userId)
@@ -318,12 +317,10 @@ class _CourierHomePageState extends State<CourierHomePage> {
                     return const Center(child: CircularProgressIndicator());
                   }
 
-                  // تصفية النتائج برمجياً لتجنب مشاكل فهارس فايربيس وعرض النشطة فقط
                   final allDocs = snapshot.data?.docs ?? [];
                   final docs = allDocs.where((doc) {
                     final data = doc.data() as Map;
                     final status = data['status'] ?? '';
-                    // نعرض الطلبات التي تخص المندوب ولكنها لم تصل للحالة النهائية بعد
                     return status != 'delivered' && status != 'available';
                   }).toList();
 
