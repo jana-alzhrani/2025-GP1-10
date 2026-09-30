@@ -50,6 +50,15 @@ class _CourierMorePageState extends State<CourierMorePage> {
   }
 
   Future _logout() async {
+    final confirm = await AppDesign.showAppDialog(
+      context: context,
+      title: 'تسجيل الخروج',
+      message: 'هل أنت متأكد من رغبتك في تسجيل الخروج من الحساب؟',
+      confirmText: 'تسجيل الخروج',
+    );
+
+    if (confirm != true) return;
+
     await FirebaseAuth.instance.signOut();
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(
@@ -110,7 +119,10 @@ class _CourierMorePageState extends State<CourierMorePage> {
                           ),
                           const SizedBox(height: 4),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: AppDesign.secondary.withOpacity(0.2),
                               borderRadius: BorderRadius.circular(20),
