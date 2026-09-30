@@ -95,7 +95,6 @@ class _CourierHomePageState extends State<CourierHomePage> {
           ? 'available'
           : 'completed';
 
-      // تحديث حالة الـ donation بناءً على الحالة الأصلية
       await FirebaseFirestore.instance
           .collection('donations')
           .doc(donationId)
@@ -103,19 +102,6 @@ class _CourierHomePageState extends State<CourierHomePage> {
             'status': targetStatus,
             'deliveredAt': FieldValue.serverTimestamp(),
           });
-
-      // تحديث الطلب في كوليكشن requests
-      final requestQuery = await FirebaseFirestore.instance
-          .collection('requests')
-          .where('requestid', isEqualTo: donationId)
-          .get();
-
-      for (var doc in requestQuery.docs) {
-        await doc.reference.update({
-          'status': targetStatus,
-          'deliveredAt': FieldValue.serverTimestamp(),
-        });
-      }
 
       if (!mounted) return;
       AppDesign.showSuccessSnackBar(context, 'تم تسجيل التسليم بنجاح');
@@ -559,7 +545,6 @@ class _CourierHomePageState extends State<CourierHomePage> {
                                       ],
                                     ),
                                     const SizedBox(height: 6),
-                                    // عرض الصناديق مرتبة فوق بعضها بشكل أنيق
                                     Container(
                                       width: double.infinity,
                                       padding: const EdgeInsets.all(10),
