@@ -754,7 +754,7 @@ Reject if:
           .collection('donation_boxes')
           .add({
         'donationId': donationId,
-        'userId': user.uid,
+'donorId': user.uid,
         'boxNumber': box,
         'gender': selectedGender,
         'ageGroup': selectedAgeGroup,
