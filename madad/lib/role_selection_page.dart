@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'app_design.dart';
+import 'beneficiary_registration_page.dart';
 
 class RoleSelectionPage extends StatefulWidget {
   const RoleSelectionPage({super.key});
@@ -20,7 +21,6 @@ class _RoleSelectionPageState extends State {
         body: SingleChildScrollView(
           child: Column(
             children: [
-              // Top Stack with Background Image (shifted down using alignment) and Back Button
               Stack(
                 children: [
                   Container(
@@ -30,12 +30,10 @@ class _RoleSelectionPageState extends State {
                       image: DecorationImage(
                         image: AssetImage('assets/images/madad.jpeg'),
                         fit: BoxFit.cover,
-                        // تم ضبط المحاذاة هنا لإنزال الخلفية قليلاً لتظهر معالم الشعار كاملة
-                        alignment: Alignment(0, -0.2), // Shift the image up slightly
+                        alignment: Alignment(0, -0.2),
                       ),
                     ),
                   ),
-                  // Dark gradient overlay for better contrast
                   Container(
                     height: 280,
                     width: double.infinity,
@@ -43,7 +41,10 @@ class _RoleSelectionPageState extends State {
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
-                        colors: [Colors.transparent, Colors.black.withOpacity(0.4)],
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withOpacity(0.4),
+                        ],
                       ),
                     ),
                   ),
@@ -62,7 +63,6 @@ class _RoleSelectionPageState extends State {
 
               const SizedBox(height: 24),
 
-              // Title Section
               Text(
                 "سجل الآن",
                 style: AppDesign.h1Style.copyWith(
@@ -81,7 +81,10 @@ class _RoleSelectionPageState extends State {
 
               // Donor Option Card
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 6,
+                ),
                 child: _buildRoleCard(
                   title: "عضو متبرع للملابس",
                   roleValue: 'donor',
@@ -91,7 +94,10 @@ class _RoleSelectionPageState extends State {
 
               // Beneficiary Option Card
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 6,
+                ),
                 child: _buildRoleCard(
                   title: "عضو مستفيد من التبرعات",
                   roleValue: 'beneficiary',
@@ -101,14 +107,10 @@ class _RoleSelectionPageState extends State {
 
               const SizedBox(height: 10),
 
-              // Already have an account? Login
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    "يوجد لديك حساب؟",
-                    style: AppDesign.bodySecondaryStyle,
-                  ),
+                  Text("يوجد لديك حساب؟", style: AppDesign.bodySecondaryStyle),
                   TextButton(
                     onPressed: () {
                       Navigator.pushNamed(context, '/login');
@@ -127,22 +129,34 @@ class _RoleSelectionPageState extends State {
 
               const SizedBox(height: 16),
 
-              // Confirm Button
+              // Confirm Button with Role Routing
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: ElevatedButton(
                   onPressed: selectedRole == null
                       ? null
                       : () {
-                          Navigator.pushNamed(
-                            context,
-                            '/signup',
-                            arguments: selectedRole,
-                          );
+                          if (selectedRole == 'beneficiary') {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    const BeneficiaryRegistrationPage(),
+                              ),
+                            );
+                          } else {
+                            Navigator.pushNamed(
+                              context,
+                              '/signup',
+                              arguments: selectedRole,
+                            );
+                          }
                         },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppDesign.primary,
-                    disabledBackgroundColor: AppDesign.secondary.withOpacity(0.3),
+                    disabledBackgroundColor: AppDesign.secondary.withOpacity(
+                      0.3,
+                    ),
                     minimumSize: const Size(double.infinity, 55),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(30),
@@ -203,7 +217,9 @@ class _RoleSelectionPageState extends State {
               children: [
                 Icon(
                   icon,
-                  color: isSelected ? AppDesign.primary : AppDesign.textSecondary,
+                  color: isSelected
+                      ? AppDesign.primary
+                      : AppDesign.textSecondary,
                   size: 22,
                 ),
                 const SizedBox(width: 12),
@@ -211,7 +227,9 @@ class _RoleSelectionPageState extends State {
                   title,
                   style: AppDesign.subtitleStyle.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: isSelected ? AppDesign.primary : AppDesign.textPrimary,
+                    color: isSelected
+                        ? AppDesign.primary
+                        : AppDesign.textPrimary,
                   ),
                 ),
               ],
