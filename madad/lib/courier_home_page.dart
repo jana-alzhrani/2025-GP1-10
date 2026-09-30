@@ -37,7 +37,7 @@ class _CourierHomePageState extends State<CourierHomePage> {
       final tasksSnapshot = await FirebaseFirestore.instance
           .collection('donations')
           .where('courierID', isEqualTo: widget.userId)
-          .where('status', whereIn: ['completed', 'available'])
+          .where('status', whereIn: ['delivered', 'available'])
           .get();
 
       if (!mounted) return;
@@ -93,7 +93,7 @@ class _CourierHomePageState extends State<CourierHomePage> {
     try {
       final targetStatus = originalStatus == 'published'
           ? 'available'
-          : 'completed';
+          : 'delivered';
 
       await FirebaseFirestore.instance
           .collection('donations')
@@ -324,7 +324,7 @@ class _CourierHomePageState extends State<CourierHomePage> {
                     final data = doc.data() as Map;
                     final status = data['status'] ?? '';
                     // نعرض الطلبات التي تخص المندوب ولكنها لم تصل للحالة النهائية بعد
-                    return status != 'completed' && status != 'available';
+                    return status != 'delivered' && status != 'available';
                   }).toList();
 
                   if (docs.isEmpty) {
