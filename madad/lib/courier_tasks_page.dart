@@ -100,7 +100,7 @@ class _CourierTasksPageState extends State<CourierTasksPage> {
                     : FirebaseFirestore.instance
                           .collection('donations')
                           .where('courierID', isEqualTo: widget.userId)
-                          .where('status', whereIn: ['completed', 'available'])
+                          .where('status', whereIn: ['delivered', 'available'])
                           .snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
@@ -122,7 +122,7 @@ class _CourierTasksPageState extends State<CourierTasksPage> {
                       return (status == 'published' || status == 'reserved') &&
                           deliveryMethod != 'self_delivery';
                     } else {
-                      return (status == 'completed' || status == 'available');
+                      return (status == 'delivered' || status == 'available');
                     }
                   }).toList();
 
