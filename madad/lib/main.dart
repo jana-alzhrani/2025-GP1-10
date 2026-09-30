@@ -40,7 +40,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppDesign.lightTheme,
 
-      home: AdminHomePage(userId: userId),
+      home: user == null ? const WelcomePage() : const AuthGate(),
       routes: {
         '/login': (context) => const LoginPage(),
         '/roleSelection': (context) => const RoleSelectionPage(),
