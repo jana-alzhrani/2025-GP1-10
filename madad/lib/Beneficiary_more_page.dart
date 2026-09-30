@@ -3,11 +3,15 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'app_design.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'Beneficiary_request_page.dart';
 
 class BeneficiaryMorePage extends StatefulWidget {
   final String userId;
 
-  const BeneficiaryMorePage({super.key, required this.userId});
+  const BeneficiaryMorePage({
+    super.key,
+    required this.userId,
+  });
 
   @override
   State<BeneficiaryMorePage> createState() => _BeneficiaryMorePageState();
@@ -54,22 +58,64 @@ class _BeneficiaryMorePageState extends State<BeneficiaryMorePage> {
     }
   }
 
-  Future<void> _showLogoutDialog() async {
-    final confirm = await AppDesign.showAppDialog(
+  // ───────────────────────── تعديل البيانات ─────────────────────────
+  Future<void> _showEditNameSheet() async {
+    final result = await showModalBottomSheet<Map<String, String>>(
       context: context,
-      title: 'تسجيل الخروج',
-      message: 'هل أنت متأكد من تسجيل الخروج؟',
-      confirmText: 'تسجيل الخروج',
-      cancelText: 'إلغاء',
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _EditNameSheet(
+        userId: widget.userId,
+        firstName: firstName,
+        lastName: lastName,
+      ),
     );
 
-    if (!confirm) return;
+    if (result == null || !mounted) return;
 
-    await FirebaseAuth.instance.signOut();
+    // تحديث فوري في الصفحة
+    setState(() {
+      firstName = result['firstName'] ?? firstName;
+      lastName = result['lastName'] ?? lastName;
+    });
 
-    if (!mounted) return;
+    AppDesign.showSuccessSnackBar(context, 'تم تحديث البيانات بنجاح');
+  }
 
-    Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+  Future<void> _showLogoutDialog() async {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('تسجيل الخروج', textAlign: TextAlign.center),
+        content: const Text(
+          'هل أنت متأكد من تسجيل الخروج؟',
+          textAlign: TextAlign.center,
+        ),
+        actionsAlignment: MainAxisAlignment.spaceEvenly,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('إلغاء',
+                style: TextStyle(color: Color.fromARGB(255, 10, 77, 92))),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              await FirebaseAuth.instance.signOut();
+
+              if (!mounted) return;
+
+              Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+            },
+            child: const Text(
+              'تسجيل الخروج',
+              style: TextStyle(color: Color.fromARGB(255, 10, 77, 92)),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -116,7 +162,10 @@ class _BeneficiaryMorePageState extends State<BeneficiaryMorePage> {
     return SizedBox(
       width: double.infinity,
       height: 150,
-      child: Image.asset('assets/images/madad_identity.png', fit: BoxFit.cover),
+      child: Image.asset(
+        'assets/images/madad_identity.png',
+        fit: BoxFit.cover,
+      ),
     );
   }
 
@@ -128,33 +177,66 @@ class _BeneficiaryMorePageState extends State<BeneficiaryMorePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'البيانات الشخصية',
-            textAlign: TextAlign.right,
-            style: AppDesign.h1Style.copyWith(
-              color: AppDesign.primary,
-              fontSize: 25,
-              fontWeight: FontWeight.w800,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'البيانات الشخصية',
+                  textAlign: TextAlign.right,
+                  style: AppDesign.h1Style.copyWith(
+                    color: AppDesign.primary,
+                    fontSize: 25,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // زر تعديل الاسم
+              InkWell(
+                onTap: _showEditNameSheet,
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppDesign.secondary.withOpacity(0.14),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.edit_outlined,
+                          size: 18, color: AppDesign.primary),
+                      const SizedBox(width: 6),
+                      Text(
+                        'تعديل',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: AppDesign.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 22),
           _buildInfoField(
-            label: 'الاسم الأول',
-            value: firstName,
-            icon: Icons.person_outline_rounded,
-          ),
+              label: 'الاسم الأول',
+              value: firstName,
+              icon: Icons.person_outline_rounded),
           const SizedBox(height: 16),
           _buildInfoField(
-            label: 'الاسم الأخير',
-            value: lastName,
-            icon: Icons.person_outline_rounded,
-          ),
+              label: 'الاسم الأخير',
+              value: lastName,
+              icon: Icons.person_outline_rounded),
           const SizedBox(height: 16),
           _buildInfoField(
-            label: 'رقم الجوال',
-            value: phone,
-            icon: Icons.phone_outlined,
-          ),
+              label: 'رقم الجوال',
+              value: phone,
+              icon: Icons.phone_outlined),
         ],
       ),
     );
@@ -266,7 +348,6 @@ class _BeneficiaryMorePageState extends State<BeneficiaryMorePage> {
             children: [
               _circleIcon(Icons.storefront_outlined),
               const SizedBox(width: 14),
-
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -285,31 +366,31 @@ class _BeneficiaryMorePageState extends State<BeneficiaryMorePage> {
                       alignment: Alignment.centerRight,
                       child: Text(
                         'مستودع مدد - واجهة الرياض',
-                        style: AppDesign.bodyStyle.copyWith(fontSize: 13),
+                        style: AppDesign.bodyStyle.copyWith(
+                          fontSize: 13,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-
               const SizedBox(width: 12),
-
               SizedBox(
                 height: 48,
                 width: 140,
                 child: OutlinedButton.icon(
                   onPressed: () async {
-                    final uri = Uri.parse(
-                      'https://www.google.com/maps/search/?api=1&query=24.768932,46.728328',
-                    );
+                    const url =
+                        'https://www.google.com/maps/search/?api=1&query=24.768932,46.728328';
 
-                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    final uri = Uri.parse(url);
+
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    }
                   },
-                  icon: Icon(
-                    Icons.location_on_outlined,
-                    color: AppDesign.primary,
-                    size: 18,
-                  ),
+                  icon: Icon(Icons.location_on_outlined,
+                      color: AppDesign.primary, size: 18),
                   label: Text(
                     'فتح الخريطة',
                     style: AppDesign.bodyStyle.copyWith(
@@ -337,7 +418,6 @@ class _BeneficiaryMorePageState extends State<BeneficiaryMorePage> {
             children: [
               _circleIcon(Icons.access_time_rounded),
               const SizedBox(width: 14),
-
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -389,14 +469,11 @@ class _BeneficiaryMorePageState extends State<BeneficiaryMorePage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(
-            'تسجيل الخروج',
-            style: AppDesign.subtitleStyle.copyWith(
-              color: Colors.red,
-              fontSize: 21,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
+          Text('تسجيل الخروج',
+              style: AppDesign.subtitleStyle.copyWith(
+                  color: Colors.red,
+                  fontSize: 21,
+                  fontWeight: FontWeight.w800)),
           const SizedBox(width: 8),
           const Icon(Icons.logout_rounded, color: Colors.red, size: 24),
         ],
@@ -435,15 +512,11 @@ class _BeneficiaryMorePageState extends State<BeneficiaryMorePage> {
       ),
       child: NavigationBar(
         height: 78,
-
-        // مهم جدًا
         selectedIndex: _bottomNavIndex,
-
         backgroundColor: Colors.transparent,
         indicatorColor: AppDesign.secondary.withOpacity(0.16),
         surfaceTintColor: Colors.transparent,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-
         onDestinationSelected: (index) {
           setState(() {
             _bottomNavIndex = index;
@@ -455,19 +528,26 @@ class _BeneficiaryMorePageState extends State<BeneficiaryMorePage> {
               '/beneficiaryHome',
               arguments: widget.userId,
             );
-          }
-
-          if (index == 1) {
-            Navigator.pushReplacementNamed(
+          } else if (index == 1) {
+            Navigator.pushReplacement(
               context,
-              '/orders',
-              arguments: widget.userId,
+              MaterialPageRoute(
+                builder: (_) => BeneficiaryOrdersPage(
+                  userId: widget.userId,
+                ),
+              ),
+            );
+          } else if (index == 2) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => BeneficiaryMorePage(
+                  userId: widget.userId,
+                ),
+              ),
             );
           }
-
-          // index 2 = more page (نفس الصفحة)
         },
-
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.home_outlined),
@@ -485,6 +565,274 @@ class _BeneficiaryMorePageState extends State<BeneficiaryMorePage> {
             label: 'المزيد',
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// ═══════════════════════════ نافذة تعديل الاسم ═══════════════════════════
+class _EditNameSheet extends StatefulWidget {
+  final String userId;
+  final String firstName;
+  final String lastName;
+
+  const _EditNameSheet({
+    required this.userId,
+    required this.firstName,
+    required this.lastName,
+  });
+
+  @override
+  State<_EditNameSheet> createState() => _EditNameSheetState();
+}
+
+class _EditNameSheetState extends State<_EditNameSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _firstCtrl;
+  late final TextEditingController _lastCtrl;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _firstCtrl = TextEditingController(text: widget.firstName);
+    _lastCtrl = TextEditingController(text: widget.lastName);
+  }
+
+  @override
+  void dispose() {
+    _firstCtrl.dispose();
+    _lastCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final first = _firstCtrl.text.trim();
+    final last = _lastCtrl.text.trim();
+
+    // ما تغيّر شي → نقفل بدون كتابة
+    if (first == widget.firstName && last == widget.lastName) {
+      Navigator.pop(context);
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    try {
+      // حفظ البيانات في Firestore
+      await FirebaseFirestore.instance
+          .collection('Users')
+          .doc(widget.userId)
+          .set({
+        'firstName': first,
+        'lastName': last,
+      }, SetOptions(merge: true));
+
+      // تحديث الاسم في Authentication (displayName)
+      try {
+        final authUser = FirebaseAuth.instance.currentUser;
+        if (authUser != null && authUser.uid == widget.userId) {
+          await authUser.updateDisplayName('$first $last');
+        }
+      } catch (e) {
+        debugPrint('Auth displayName update failed: $e');
+      }
+
+      if (!mounted) return;
+      Navigator.pop(context, {'firstName': first, 'lastName': last});
+    } catch (e) {
+      debugPrint('Error updating profile: $e');
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = 'تعذّر حفظ التعديل، حاولي مرة أخرى';
+      });
+    }
+  }
+
+  InputDecoration _decoration(String hint) {
+    return InputDecoration(
+      hintText: hint,
+      counterText: '',
+      prefixIcon: Icon(Icons.person_outline_rounded, color: AppDesign.primary),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppDesign.radiusLG),
+        borderSide: BorderSide(color: AppDesign.border),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppDesign.radiusLG),
+        borderSide: BorderSide(color: AppDesign.border),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppDesign.radiusLG),
+        borderSide: BorderSide(color: AppDesign.primary, width: 1.6),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppDesign.radiusLG),
+        borderSide: BorderSide(color: AppDesign.error, width: 1.2),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppDesign.radiusLG),
+        borderSide: BorderSide(color: AppDesign.error, width: 1.6),
+      ),
+      errorStyle: TextStyle(
+        fontFamily: AppDesign.fontFamily,
+        fontSize: AppDesign.caption,
+        fontWeight: FontWeight.w400,
+        color: AppDesign.error,
+      ),
+    );
+  }
+
+  String? _validateName(String? v) {
+    final t = (v ?? '').trim();
+    if (t.isEmpty) return 'هذا الحقل مطلوب';
+    if (t.length < 2) return 'الاسم قصير جداً';
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Padding(
+        // يرفع النافذة فوق الكيبورد
+        padding:
+            EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'تعديل البيانات الشخصية',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: AppDesign.primary,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'الاسم الأول',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppDesign.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _firstCtrl,
+                  enabled: !_saving,
+                  maxLength: 30,
+                  textInputAction: TextInputAction.next,
+                  cursorColor: AppDesign.primary,
+                  decoration: _decoration('الاسم الأول'),
+                  validator: _validateName,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'الاسم الأخير',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppDesign.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _lastCtrl,
+                  enabled: !_saving,
+                  maxLength: 30,
+                  textInputAction: TextInputAction.done,
+                  onFieldSubmitted: (_) => _save(),
+                  cursorColor: AppDesign.primary,
+                  decoration: _decoration('الاسم الأخير'),
+                  validator: _validateName,
+                ),
+                if (_error != null) ...[
+                  const SizedBox(height: 14),
+                  Text(
+                    _error!,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontFamily: AppDesign.fontFamily,
+                      color: AppDesign.error,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 22),
+                SizedBox(
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: _saving ? null : _save,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppDesign.primary,
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor:
+                          AppDesign.primary.withOpacity(0.6),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppDesign.radiusLG),
+                      ),
+                    ),
+                    child: _saving
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.4,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            'حفظ',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: _saving ? null : () => Navigator.pop(context),
+                  child: Text(
+                    'إلغاء',
+                    style: TextStyle(color: AppDesign.primary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
