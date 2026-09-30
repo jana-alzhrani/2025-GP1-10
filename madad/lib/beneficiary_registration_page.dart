@@ -1,10 +1,7 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:file_picker/file_picker.dart';
 
 import 'otp_page.dart';
@@ -31,11 +28,9 @@ class _BeneficiaryRegistrationPageState
 
   PlatformFile? _selectedFile;
   bool _isLoading = false;
-  Timer? _debouncePhone;
 
   @override
   void dispose() {
-    _debouncePhone?.cancel();
     _nameController.dispose();
     _phoneController.dispose();
     _socialSecurityController.dispose();
@@ -102,52 +97,58 @@ class _BeneficiaryRegistrationPageState
     }
 
     final normalizedPhone = '+966${phone.substring(1)}';
+    final users = FirebaseFirestore.instance.collection('Users');
 
-    try {
-      final users = FirebaseFirestore.instance.collection('Users');
+    final results = await Future.wait([
+      users.where('phone', isEqualTo: phone).get(),
+      users.where('phone', isEqualTo: normalizedPhone).get(),
+      users.where('phoneNumber', isEqualTo: phone).get(),
+      users.where('phoneNumber', isEqualTo: normalizedPhone).get(),
+    ]);
 
-      final results = await Future.wait([
-        users.where('phone', isEqualTo: phone).get(),
-        users.where('phone', isEqualTo: normalizedPhone).get(),
-        users.where('phoneNumber', isEqualTo: phone).get(),
-        users.where('phoneNumber', isEqualTo: normalizedPhone).get(),
-      ]);
-
-      if (!mounted || _phoneController.text.trim() != phone) {
-        return false;
-      }
-
-      final exists = results.any((result) => result.docs.isNotEmpty);
-
-      setState(() {
-        _phoneError = exists ? 'رقم الجوال مستخدم مسبقاً' : null;
-      });
-
-      return exists;
-    } catch (e) {
-      debugPrint('Phone duplicate check failed: $e');
-      rethrow;
-    }
+    return results.any((result) => result.docs.isNotEmpty);
   }
 
-  // التحقق من جميع الحقول
-  bool _validateAllFields() {
-    setState(() {
-      _nameError = _validateName(_nameController.text);
-      _phoneError = _validatePhone(_phoneController.text);
-      _socialSecurityError = _validateSocialSecurity(
-        _socialSecurityController.text,
-      );
+  // التحقق من تكرار رقم الضمان الاجتماعي
+  Future<bool> _checkSocialSecurityExists(String value) async {
+    final number = value.trim();
 
-      _fileError = _selectedFile == null
-          ? 'الرجاء إرفاق ملف إثبات الضمان الاجتماعي'
-          : null;
+    if (!RegExp(r'^[0-9]{9}$').hasMatch(number)) {
+      return false;
+    }
+
+    final result = await FirebaseFirestore.instance
+        .collection('Users')
+        .where('socialSecurityNumber', isEqualTo: number)
+        .limit(1)
+        .get();
+
+    return result.docs.isNotEmpty;
+  }
+
+  // التحقق من جميع الحقول عند الضغط على زر التسجيل
+  bool _validateAllFields() {
+    final nameError = _validateName(_nameController.text);
+    final phoneError = _validatePhone(_phoneController.text);
+    final socialSecurityError = _validateSocialSecurity(
+      _socialSecurityController.text,
+    );
+
+    final fileError = _selectedFile == null
+        ? 'الرجاء إرفاق ملف إثبات الضمان الاجتماعي'
+        : null;
+
+    setState(() {
+      _nameError = nameError;
+      _phoneError = phoneError;
+      _socialSecurityError = socialSecurityError;
+      _fileError = fileError;
     });
 
-    return _nameError == null &&
-        _phoneError == null &&
-        _socialSecurityError == null &&
-        _fileError == null;
+    return nameError == null &&
+        phoneError == null &&
+        socialSecurityError == null &&
+        fileError == null;
   }
 
   // اختيار ملف PDF
@@ -195,35 +196,64 @@ class _BeneficiaryRegistrationPageState
     }
   }
 
-  // إرسال بيانات المستفيد والتحويل إلى OTP
+  // إرسال طلب التسجيل
   Future<void> _submitRegistration() async {
     FocusScope.of(context).unfocus();
-    _debouncePhone?.cancel();
 
-    if (!_validateAllFields()) return;
+    // التحقق من الحقول وعرض الأخطاء بعد الضغط فقط
+    final fieldsValid = _validateAllFields();
+
+    final phone = _phoneController.text.trim();
+    final socialSecurity = _socialSecurityController.text.trim();
+
+    // نتحقق من صحة تنسيق الرقم قبل البحث عن التكرار
+    final phoneFormatValid = RegExp(r'^05[0-9]{8}$').hasMatch(phone);
+
+    final socialSecurityFormatValid = RegExp(
+      r'^[0-9]{9}$',
+    ).hasMatch(socialSecurity);
 
     setState(() {
       _isLoading = true;
     });
 
     try {
-      final fullName = _nameController.text.trim();
-      final phone = _phoneController.text.trim();
-      final socialSecurity = _socialSecurityController.text.trim();
-      final normalizedPhone = '+966${phone.substring(1)}';
+      bool phoneExists = false;
+      bool socialSecurityExists = false;
 
-      // إعادة التحقق من عدم استخدام رقم الجوال
-      final phoneExists = await _checkPhoneExists(phone);
+      // فحص تكرار الجوال حتى لو كانت حقول أخرى فارغة
+      if (phoneFormatValid) {
+        phoneExists = await _checkPhoneExists(phone);
+      }
+
+      // فحص تكرار الضمان حتى لو كانت حقول أخرى فارغة
+      if (socialSecurityFormatValid) {
+        socialSecurityExists = await _checkSocialSecurityExists(socialSecurity);
+      }
 
       if (!mounted) return;
 
-      if (phoneExists) {
-        setState(() {
+      // إظهار تنبيهات التكرار مع تنبيهات الحقول الناقصة
+      setState(() {
+        if (phoneExists) {
           _phoneError = 'رقم الجوال مستخدم مسبقاً';
+        }
+
+        if (socialSecurityExists) {
+          _socialSecurityError = 'رقم الضمان الاجتماعي مسجل مسبقاً';
+        }
+      });
+
+      // إذا كان هناك حقل ناقص أو رقم مكرر، نوقف التسجيل
+      if (!fieldsValid || phoneExists || socialSecurityExists) {
+        setState(() {
           _isLoading = false;
         });
         return;
       }
+
+      final fullName = _nameController.text.trim();
+      final normalizedPhone = '+966${phone.substring(1)}';
 
       // تقسيم الاسم إلى اسم أول وبقية الاسم
       final nameParts = fullName
@@ -234,9 +264,7 @@ class _BeneficiaryRegistrationPageState
       final firstName = nameParts.first;
       final lastName = nameParts.skip(1).join(' ');
 
-      // نرسل رمز التحقق أولاً، ونرفع ملف الضمان بعد نجاح التحقق من الجوال.
-      if (!mounted) return;
-
+      // إرسال رمز التحقق إلى الجوال
       await FirebaseAuth.instance.verifyPhoneNumber(
         phoneNumber: normalizedPhone,
 
@@ -380,9 +408,9 @@ class _BeneficiaryRegistrationPageState
                   errorText: _nameError,
                   keyboardType: TextInputType.name,
                   onChanged: (value) {
-                    setState(() {
-                      _nameError = _validateName(value);
-                    });
+                    if (_nameError != null) {
+                      setState(() => _nameError = null);
+                    }
                   },
                 ),
 
@@ -398,24 +426,9 @@ class _BeneficiaryRegistrationPageState
                     LengthLimitingTextInputFormatter(10),
                   ],
                   onChanged: (value) {
-                    setState(() {
-                      _phoneError = _validatePhone(value);
-                    });
-
-                    if (_debouncePhone?.isActive ?? false) {
-                      _debouncePhone!.cancel();
+                    if (_phoneError != null) {
+                      setState(() => _phoneError = null);
                     }
-
-                    if (_validatePhone(value) != null) {
-                      return;
-                    }
-
-                    _debouncePhone = Timer(
-                      const Duration(milliseconds: 500),
-                      () {
-                        _checkPhoneExists(value);
-                      },
-                    );
                   },
                 ),
 
@@ -431,9 +444,9 @@ class _BeneficiaryRegistrationPageState
                     LengthLimitingTextInputFormatter(9),
                   ],
                   onChanged: (value) {
-                    setState(() {
-                      _socialSecurityError = _validateSocialSecurity(value);
-                    });
+                    if (_socialSecurityError != null) {
+                      setState(() => _socialSecurityError = null);
+                    }
                   },
                 ),
 
