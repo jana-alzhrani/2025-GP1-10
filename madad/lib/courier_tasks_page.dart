@@ -8,58 +8,45 @@ class CourierTasksPage extends StatefulWidget {
   const CourierTasksPage({super.key, required this.userId});
 
   @override
-  State<CourierTasksPage> createState() => _CourierTasksPageState();
+  State createState() => _CourierTasksPageState();
 }
 
 class _CourierTasksPageState extends State<CourierTasksPage> {
   int _selectedTab = 0;
 
-  Future _acceptTask(String requestId) async {
+  Future _acceptTask(String donationId, Map donationData) async {
     final confirm = await AppDesign.showAppDialog(
       context: context,
-      title: 'قبول المهمة',
-      message: 'هل أنت متأكد من قبول هذه المهمة؟',
-      confirmText: 'قبول',
+      title: 'قبول الطلب',
+      message: 'هل أنت متأكد من رغبتك في قبول هذا الطلب؟',
+      confirmText: 'قبول الطلب',
     );
 
     if (confirm != true) return;
 
     try {
-      await FirebaseFirestore.instance.collection('requests').doc(requestId).update({
-        'status': 'in_transit',
-        'courierId': widget.userId,
-        'acceptedAt': FieldValue.serverTimestamp(),
-      });
+      final currentStatus = donationData['status'] ?? 'published';
+      final city = donationData['city'] ?? 'الرياض';
+      final district = donationData['district'] ?? 'الحي';
+      final deliveryLocation = '${city} - ${district}';
+
+      await FirebaseFirestore.instance
+          .collection('donations')
+          .doc(donationId)
+          .update({
+            'originalStatus': currentStatus,
+            'courierID': widget.userId,
+            'acceptedAt': FieldValue.serverTimestamp(),
+          });
 
       if (!mounted) return;
-      AppDesign.showSuccessSnackBar(context, 'تم قبول المهمة بنجاح');
+      AppDesign.showSuccessSnackBar(
+        context,
+        'تم قبول الطلب بنجاح وإضافته لمهامك النشطة',
+      );
     } catch (e) {
       if (!mounted) return;
-      AppDesign.showErrorSnackBar(context, 'حدث خطأ أثناء قبول المهمة: $e');
-    }
-  }
-
-  Future _completeTask(String requestId) async {
-    final confirm = await AppDesign.showAppDialog(
-      context: context,
-      title: 'إتمام التوصيل',
-      message: 'تأكيد التسليم للمستفيد؟',
-      confirmText: 'تأكيد التسليم',
-    );
-
-    if (confirm != true) return;
-
-    try {
-      await FirebaseFirestore.instance.collection('requests').doc(requestId).update({
-        'status': 'completed',
-        'deliveredAt': FieldValue.serverTimestamp(),
-      });
-
-      if (!mounted) return;
-      AppDesign.showSuccessSnackBar(context, 'تم تسجيل التسليم بنجاح');
-    } catch (e) {
-      if (!mounted) return;
-      AppDesign.showErrorSnackBar(context, 'حدث خطأ أثناء تحديث حالة التسليم: $e');
+      AppDesign.showErrorSnackBar(context, 'حدث خطأ أثناء قبول الطلب: $e');
     }
   }
 
@@ -70,7 +57,7 @@ class _CourierTasksPageState extends State<CourierTasksPage> {
       child: Scaffold(
         backgroundColor: AppDesign.background,
         appBar: AppBar(
-          title: const Text('مهام التوصيل'),
+          title: const Text('إدارة مهام التوصيل'),
           automaticallyImplyLeading: false,
         ),
         body: Column(
@@ -88,10 +75,16 @@ class _CourierTasksPageState extends State<CourierTasksPage> {
                 child: Row(
                   children: [
                     Expanded(
-                      child: _buildTabButton(title: 'المهام المتاحة', index: 0),
+                      child: _buildTabButton(
+                        title: 'الطلبات المتاحة',
+                        index: 0,
+                      ),
                     ),
                     Expanded(
-                      child: _buildTabButton(title: 'مهامي النشطة', index: 1),
+                      child: _buildTabButton(
+                        title: 'الطلبات المكتملة',
+                        index: 1,
+                      ),
                     ),
                   ],
                 ),
@@ -101,13 +94,14 @@ class _CourierTasksPageState extends State<CourierTasksPage> {
               child: StreamBuilder(
                 stream: _selectedTab == 0
                     ? FirebaseFirestore.instance
-                        .collection('requests')
-                        .where('status', isEqualTo: 'pending')
-                        .snapshots()
+                          .collection('donations')
+                          .where('status', whereIn: ['published', 'reserved'])
+                          .snapshots()
                     : FirebaseFirestore.instance
-                        .collection('requests')
-                        .where('courierId', isEqualTo: widget.userId)
-                        .snapshots(),
+                          .collection('donations')
+                          .where('courierID', isEqualTo: widget.userId)
+                          .where('status', whereIn: ['completed', 'available'])
+                          .snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
@@ -117,101 +111,244 @@ class _CourierTasksPageState extends State<CourierTasksPage> {
                     return const Center(child: Text('حدث خطأ في تحميل المهام'));
                   }
 
-                  final docs = snapshot.data?.docs ?? [];
+                  final allDocs = snapshot.data?.docs ?? [];
 
-                  final filteredDocs = docs.where((doc) {
+                  final docs = allDocs.where((doc) {
                     final data = doc.data() as Map;
-                    final status = (data['status'] ?? '').toString();
-                    if (_selectedTab == 1) {
-                      return status == 'in_transit' || status == 'completed';
+                    final status = data['status'] ?? '';
+                    final deliveryMethod = data['deliveryMethod'] ?? '';
+
+                    if (_selectedTab == 0) {
+                      return (status == 'published' || status == 'reserved') &&
+                          deliveryMethod != 'self_delivery';
+                    } else {
+                      return (status == 'completed' || status == 'available');
                     }
-                    return true;
                   }).toList();
 
-                  if (filteredDocs.isEmpty) {
+                  if (docs.isEmpty) {
                     return Center(
                       child: Text(
-                        _selectedTab == 0 ? 'لا توجد مهام متاحة حالياً' : 'ليس لديك مهام نشطة',
+                        _selectedTab == 0
+                            ? 'لا توجد طلبات متاحة حالياً'
+                            : 'لا توجد طلبات مكتملة',
                         style: AppDesign.bodySecondaryStyle,
                       ),
                     );
                   }
 
                   return ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: AppDesign.screenPadding),
-                    itemCount: filteredDocs.length,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppDesign.screenPadding,
+                    ),
+                    itemCount: docs.length,
                     itemBuilder: (context, index) {
-                      final doc = filteredDocs[index];
+                      final doc = docs[index];
                       final data = doc.data() as Map;
-                      final status = (data['status'] ?? 'pending').toString();
-                      final deliveryLocation = data['deliveryLocation'] ?? 'غير محدد';
+                      final status = data['status'] ?? 'published';
 
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: AppDesign.spaceMD),
-                        padding: const EdgeInsets.all(AppDesign.cardPadding),
-                        decoration: AppDesign.primaryCardDecoration,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      final rawCity = (data['city'] ?? '').toString().trim();
+                      final rawDistrict = (data['district'] ?? '')
+                          .toString()
+                          .trim();
+                      final city = rawCity.isNotEmpty ? rawCity : 'لا يوجد';
+                      final district = rawDistrict.isNotEmpty
+                          ? rawDistrict
+                          : 'لا يوجد';
+
+                      final totalBoxes =
+                          ((data['numberOfItems'] ?? 0) is num
+                                  ? (data['numberOfItems'] as num) / 5
+                                  : 1)
+                              .ceil();
+                      final boxCount =
+                          ((data['boxCodes'] is List)
+                                  ? (data['boxCodes'] as List).length
+                                  : totalBoxes)
+                              .clamp(0, 999999);
+                      final donorId = data['donorID'] ?? '';
+
+                      final String pickupLocation = status == 'reserved'
+                          ? 'المستودع'
+                          : '${city} - ${district}';
+                      final String deliveryLocation = status == 'reserved'
+                          ? '${city} - ${district}'
+                          : 'المستودع';
+
+                      return FutureBuilder(
+                        future: donorId.isNotEmpty
+                            ? FirebaseFirestore.instance
+                                  .collection('Users')
+                                  .doc(donorId)
+                                  .get()
+                            : Future.value(null),
+                        builder: (context, userSnapshot) {
+                          String donorName = 'صاحب الطلب';
+                          String donorPhone = 'غير متوفر';
+
+                          if (userSnapshot.hasData &&
+                              userSnapshot.data != null &&
+                              userSnapshot.data!.exists) {
+                            final userData =
+                                userSnapshot.data!.data() as Map? ?? {};
+                            donorName =
+                                '${userData['firstName'] ?? ''} ${userData['lastName'] ?? ''}'
+                                    .trim();
+                            donorPhone =
+                                (userData['phone'] ??
+                                        userData['phoneNumber'] ??
+                                        '')
+                                    .toString();
+                          }
+
+                          return Container(
+                            margin: const EdgeInsets.only(
+                              bottom: AppDesign.spaceMD,
+                            ),
+                            padding: const EdgeInsets.all(
+                              AppDesign.cardPadding,
+                            ),
+                            decoration: AppDesign.primaryCardDecoration,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  'طلب توصيل #${doc.id.substring(0, 5).toUpperCase()}',
-                                  style: AppDesign.subtitleStyle.copyWith(fontWeight: FontWeight.bold),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: status == 'completed'
-                                        ? AppDesign.success.withOpacity(0.2)
-                                        : AppDesign.warning.withOpacity(0.3),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    status == 'pending'
-                                        ? 'متاح'
-                                        : status == 'in_transit'
-                                            ? 'قيد التوصيل'
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      'طلب #${doc.id.substring(0, 5).toUpperCase()}',
+                                      style: AppDesign.subtitleStyle.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color:
+                                            (status == 'completed' ||
+                                                status == 'available')
+                                            ? AppDesign.success.withOpacity(0.2)
+                                            : AppDesign.warning.withOpacity(
+                                                0.3,
+                                              ),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        status == 'published'
+                                            ? 'متاح (تبرع جديد)'
+                                            : status == 'reserved'
+                                            ? 'متاح (محجوز لمستفيد)'
                                             : 'مكتمل',
-                                    style: AppDesign.captionStyle.copyWith(fontWeight: FontWeight.bold),
-                                  ),
+                                        style: AppDesign.captionStyle.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.location_on_outlined,
+                                      size: 18,
+                                      color: AppDesign.primary,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'موقع الاستلام: $pickupLocation',
+                                        style: AppDesign.bodySecondaryStyle,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.local_shipping_outlined,
+                                      size: 18,
+                                      color: AppDesign.primary,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'موقع التسليم: $deliveryLocation',
+                                        style: AppDesign.bodySecondaryStyle,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.inventory_2_outlined,
+                                      size: 18,
+                                      color: AppDesign.primary,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'عدد الصناديق: $boxCount',
+                                        style: AppDesign.bodySecondaryStyle,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.person_outline,
+                                      size: 18,
+                                      color: AppDesign.primary,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'صاحب الطلب: $donorName',
+                                        style: AppDesign.bodySecondaryStyle,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.phone_outlined,
+                                      size: 18,
+                                      color: AppDesign.primary,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'رقم الجوال: ${donorPhone.isNotEmpty ? donorPhone : 'غير متوفر'}',
+                                        style: AppDesign.bodySecondaryStyle,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                if (_selectedTab == 0)
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: ElevatedButton(
+                                      onPressed: () =>
+                                          _acceptTask(doc.id, data),
+                                      child: const Text('قبول الطلب'),
+                                    ),
+                                  ),
                               ],
                             ),
-                            const SizedBox(height: 10),
-                            Row(
-                              children: [
-                                const Icon(Icons.location_on_outlined, size: 18, color: AppDesign.primary),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    'الوجهة: $deliveryLocation',
-                                    style: AppDesign.bodySecondaryStyle,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            if (_selectedTab == 0)
-                              SizedBox(
-                                width: double.infinity,
-                                child: ElevatedButton(
-                                  onPressed: () => _acceptTask(doc.id),
-                                  child: const Text('قبول المهمة'),
-                                ),
-                              )
-                            else if (status == 'in_transit')
-                              SizedBox(
-                                width: double.infinity,
-                                child: ElevatedButton(
-                                  style: ElevatedButton.styleFrom(backgroundColor: AppDesign.success),
-                                  onPressed: () => _completeTask(doc.id),
-                                  child: const Text('تحديد كـ تم التسليم'),
-                                ),
-                              ),
-                          ],
-                        ),
+                          );
+                        },
                       );
                     },
                   );
