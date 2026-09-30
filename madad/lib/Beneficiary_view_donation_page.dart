@@ -24,6 +24,7 @@ class BeneficiaryViewDonationPage extends StatefulWidget {
 class _BeneficiaryViewDonationPageState
     extends State<BeneficiaryViewDonationPage> {
   bool _isAddingToCart = false;
+
   late Future<Map<String, dynamic>> _donationDetailsFuture;
 
   @override
@@ -32,12 +33,39 @@ class _BeneficiaryViewDonationPageState
     _donationDetailsFuture = _loadDonationDetails();
   }
 
+  // ============================================================
+  // Helpers
+  // ============================================================
+
   int _parseInt(dynamic value) {
     if (value is int) return value;
-    if (value is double) return value.toInt();
-    if (value is String) return int.tryParse(value) ?? 0;
+
+    if (value is double) {
+      return value.toInt();
+    }
+
+    if (value is String) {
+      return int.tryParse(value) ?? 0;
+    }
+
     return 0;
   }
+
+  Uint8List? _decodeImage(String? imageBase64) {
+    if (imageBase64 == null || imageBase64.trim().isEmpty) {
+      return null;
+    }
+
+    try {
+      return base64Decode(imageBase64);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ============================================================
+  // Load Donation Details
+  // ============================================================
 
   Future<Map<String, dynamic>> _loadDonationDetails() async {
     final boxDoc = await FirebaseFirestore.instance
@@ -52,44 +80,105 @@ class _BeneficiaryViewDonationPageState
     final boxData = boxDoc.data()!;
 
     final items = boxData['items'];
+
     List<Map<String, dynamic>> parsedItems = [];
 
     if (items is List) {
       parsedItems = items
           .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
+          .map(
+            (item) => Map<String, dynamic>.from(item),
+          )
           .toList();
     }
 
-    return {'box': boxData, 'items': parsedItems};
+    return {
+      'box': boxData,
+      'items': parsedItems,
+    };
   }
 
-  Uint8List? _decodeImage(String? imageBase64) {
-    if (imageBase64 == null || imageBase64.trim().isEmpty) return null;
+  // ============================================================
+  // Recommended System (by age group only)
+  // ============================================================
 
+  Future<List<Map<String, dynamic>>> _loadRecommendedDonations(
+    Map<String, dynamic> currentBox,
+  ) async {
     try {
-      return base64Decode(imageBase64);
-    } catch (_) {
-      return null;
+      final currentAgeGroup =
+          (currentBox['ageGroup']?['label'] ?? '').toString().trim();
+
+      // لو ما فيه فئة عمرية للتبرع الحالي ما نقدر نوصي
+      if (currentAgeGroup.isEmpty) return [];
+
+      final snapshot = await FirebaseFirestore.instance
+          .collection('donation_boxes')
+          .get();
+
+      final List<Map<String, dynamic>> recommendations = [];
+
+      for (final doc in snapshot.docs) {
+        // لا نوصي بنفس التبرع
+        if (doc.id == widget.boxId) continue;
+
+        final data = doc.data();
+
+        final recommendedAgeGroup =
+            (data['ageGroup']?['label'] ?? '').toString().trim();
+
+        // نفس الفئة العمرية فقط
+        if (recommendedAgeGroup == currentAgeGroup) {
+          recommendations.add({
+            'id': doc.id,
+            'data': data,
+          });
+        }
+      }
+
+      // أقصى عدد 5 توصيات
+      return recommendations.take(5).toList();
+    } catch (e) {
+      debugPrint('Error loading recommended donations: $e');
+      return [];
     }
   }
 
-  Future<void> _addToCart(Map<String, dynamic> boxData) async {
+  // ============================================================
+  // Add to Cart
+  // ============================================================
+
+  Future<void> _addToCart(
+    Map<String, dynamic> boxData,
+  ) async {
     try {
       setState(() => _isAddingToCart = true);
 
       final existingCartItem = await FirebaseFirestore.instance
           .collection('cart')
-          .where('beneficiaryId', isEqualTo: widget.userId)
-          .where('boxId', isEqualTo: widget.boxId)
-          .where('status', isEqualTo: 'in_cart')
+          .where(
+            'beneficiaryId',
+            isEqualTo: widget.userId,
+          )
+          .where(
+            'boxId',
+            isEqualTo: widget.boxId,
+          )
+          .where(
+            'status',
+            isEqualTo: 'in_cart',
+          )
           .limit(1)
           .get();
 
       if (existingCartItem.docs.isNotEmpty) {
         if (!mounted) return;
 
-        AppDesign.showErrorSnackBar(context, 'التبرع مضاف للسلة مسبقًا');
+        AppDesign.showErrorSnackBar(
+          context,
+          'التبرع مضاف للسلة مسبقًا',
+        );
+
         return;
       }
 
@@ -98,38 +187,57 @@ class _BeneficiaryViewDonationPageState
         'boxId': widget.boxId,
         'donationId': boxData['donationId'] ?? '',
         'status': 'in_cart',
-
         'gender': boxData['gender'] ?? '',
         'ageGroup': boxData['ageGroup']?['label'] ?? '',
         'generalSize': boxData['generalSize'] ?? '',
         'numberOfItems': (boxData['items'] is List)
             ? (boxData['items'] as List).length
             : 0,
-
         'createdAt': FieldValue.serverTimestamp(),
       });
 
       if (!mounted) return;
 
-      AppDesign.showSuccessSnackBar(context, 'تمت إضافة التبرع إلى السلة ');
+      AppDesign.showSuccessSnackBar(
+        context,
+        'تمت إضافة التبرع إلى السلة',
+      );
     } catch (e) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('فشل إضافة الصندوق إلى السلة: $e')),
+        SnackBar(
+          content: Text(
+            'فشل إضافة الصندوق إلى السلة: $e',
+          ),
+        ),
       );
     } finally {
       if (mounted) {
-        setState(() => _isAddingToCart = false);
+        setState(
+          () => _isAddingToCart = false,
+        );
       }
     }
   }
 
-  Widget _infoRow(IconData icon, String title, String value) {
+  // ============================================================
+  // Info Row
+  // ============================================================
+
+  Widget _infoRow(
+    IconData icon,
+    String title,
+    String value,
+  ) {
     return Row(
       textDirection: TextDirection.rtl,
       children: [
-        Icon(icon, size: 20, color: AppDesign.primary),
+        Icon(
+          icon,
+          size: 20,
+          color: AppDesign.primary,
+        ),
         const SizedBox(width: 8),
         Text(
           title,
@@ -138,15 +246,27 @@ class _BeneficiaryViewDonationPageState
           ),
         ),
         const SizedBox(width: 12),
-        Text(
-          value,
-          style: AppDesign.bodyStyle.copyWith(fontWeight: FontWeight.w700),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: AppDesign.bodyStyle.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ),
       ],
     );
   }
 
-  Widget _chip(IconData icon, String text) {
+  // ============================================================
+  // Chip
+  // ============================================================
+
+  Widget _chip(
+    IconData icon,
+    String text,
+  ) {
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppDesign.spaceMD,
@@ -154,15 +274,25 @@ class _BeneficiaryViewDonationPageState
       ),
       decoration: BoxDecoration(
         color: AppDesign.surfaceAlt,
-        borderRadius: BorderRadius.circular(AppDesign.radiusLG),
-        border: Border.all(color: AppDesign.border),
+        borderRadius: BorderRadius.circular(
+          AppDesign.radiusLG,
+        ),
+        border: Border.all(
+          color: AppDesign.border,
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         textDirection: TextDirection.rtl,
         children: [
-          Icon(icon, size: AppDesign.iconSM, color: AppDesign.primary),
-          const SizedBox(width: AppDesign.spaceSM),
+          Icon(
+            icon,
+            size: AppDesign.iconSM,
+            color: AppDesign.primary,
+          ),
+          const SizedBox(
+            width: AppDesign.spaceSM,
+          ),
           Text(
             text,
             style: AppDesign.captionStyle.copyWith(
@@ -175,17 +305,32 @@ class _BeneficiaryViewDonationPageState
     );
   }
 
-  Widget _buildItemCard(Map<String, dynamic> item, int itemIndex) {
+  // ============================================================
+  // Item Card
+  // ============================================================
+
+  Widget _buildItemCard(
+    Map<String, dynamic> item,
+    int itemIndex,
+  ) {
     final imageBase64 = item['imageBase64'];
+
     final imageUrl = item['imageUrl'];
-    final Uint8List? imageBytes = (imageBase64 != null)
-        ? _decodeImage(imageBase64.toString())
+
+    final Uint8List? imageBytes = imageBase64 != null
+        ? _decodeImage(
+            imageBase64.toString(),
+          )
         : null;
+
     final type = (item['type'] ?? 'غير محدد').toString();
+
     final size = (item['size'] ?? '').toString();
 
     return Container(
-      margin: const EdgeInsets.only(bottom: AppDesign.spaceLG),
+      margin: const EdgeInsets.only(
+        bottom: AppDesign.spaceLG,
+      ),
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -199,8 +344,12 @@ class _BeneficiaryViewDonationPageState
             ),
             decoration: BoxDecoration(
               color: AppDesign.white,
-              borderRadius: BorderRadius.circular(AppDesign.radiusLG),
-              border: Border.all(color: AppDesign.border),
+              borderRadius: BorderRadius.circular(
+                AppDesign.radiusLG,
+              ),
+              border: Border.all(
+                color: AppDesign.border,
+              ),
             ),
             child: Row(
               textDirection: TextDirection.rtl,
@@ -209,14 +358,20 @@ class _BeneficiaryViewDonationPageState
                 GestureDetector(
                   onTap: imageBytes == null
                       ? null
-                      : () => _showImagePreview(imageBytes),
+                      : () => _showImagePreview(
+                            imageBytes,
+                          ),
                   child: Container(
                     width: 88,
                     height: 88,
                     decoration: BoxDecoration(
                       color: AppDesign.surfaceAlt,
-                      borderRadius: BorderRadius.circular(AppDesign.radiusMD),
-                      border: Border.all(color: AppDesign.border),
+                      borderRadius: BorderRadius.circular(
+                        AppDesign.radiusMD,
+                      ),
+                      border: Border.all(
+                        color: AppDesign.border,
+                      ),
                     ),
                     child: imageBytes != null
                         ? ClipRRect(
@@ -229,26 +384,29 @@ class _BeneficiaryViewDonationPageState
                               gaplessPlayback: true,
                             ),
                           )
-                        : (imageUrl != null
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(
-                                    AppDesign.radiusMD,
-                                  ),
-                                  child: Image.network(
-                                    imageUrl.toString(),
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => const Icon(
+                        : (imageUrl != null &&
+                                imageUrl.toString().trim().isNotEmpty
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(
+                                  AppDesign.radiusMD,
+                                ),
+                                child: Image.network(
+                                  imageUrl.toString(),
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) {
+                                    return const Icon(
                                       Icons.broken_image,
                                       color: AppDesign.secondary,
                                       size: 30,
-                                    ),
-                                  ),
-                                )
-                              : const Icon(
-                                  Icons.image_not_supported_outlined,
-                                  color: AppDesign.secondary,
-                                  size: 30,
-                                )),
+                                    );
+                                  },
+                                ),
+                              )
+                            : const Icon(
+                                Icons.image_not_supported_outlined,
+                                color: AppDesign.secondary,
+                                size: 30,
+                              )),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -299,39 +457,492 @@ class _BeneficiaryViewDonationPageState
     );
   }
 
+  // ============================================================
+  // Recommended Card
+  // ============================================================
+
+  Widget _buildRecommendedCard(
+    Map<String, dynamic> recommendation,
+  ) {
+    final String boxId = recommendation['id'].toString();
+
+    final Map<String, dynamic> data = Map<String, dynamic>.from(
+      recommendation['data'] as Map,
+    );
+
+    final gender = (data['gender'] ?? '-').toString();
+
+    final ageGroup = (data['ageGroup']?['label'] ?? '-').toString();
+
+    final generalSize = (data['generalSize'] ?? '').toString();
+
+    final items = data['items'];
+
+    int numberOfItems = 0;
+
+    if (items is List) {
+      numberOfItems = items.length;
+    }
+
+    // ------------------------------------------------------------
+    // Get first available image
+    // ------------------------------------------------------------
+
+    Uint8List? imageBytes;
+
+    String? imageUrl;
+
+    if (items is List && items.isNotEmpty) {
+      final firstItem = items.first;
+
+      if (firstItem is Map) {
+        final base64Image = firstItem['imageBase64'];
+
+        final networkImage = firstItem['imageUrl'];
+
+        if (base64Image != null) {
+          imageBytes = _decodeImage(
+            base64Image.toString(),
+          );
+        }
+
+        if (networkImage != null &&
+            networkImage.toString().trim().isNotEmpty) {
+          imageUrl = networkImage.toString();
+        }
+      }
+    }
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => BeneficiaryViewDonationPage(
+              boxId: boxId,
+              userId: widget.userId,
+            ),
+          ),
+        );
+      },
+      child: Container(
+        width: 245,
+        margin: const EdgeInsets.only(
+          left: AppDesign.spaceMD,
+        ),
+        decoration: BoxDecoration(
+          color: AppDesign.white,
+          borderRadius: BorderRadius.circular(
+            AppDesign.radiusLG,
+          ),
+          border: Border.all(
+            color: AppDesign.border,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ----------------------------------------------------
+            // Image
+            // ----------------------------------------------------
+
+            SizedBox(
+              height: 145,
+              child: ClipRRect(
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(
+                    AppDesign.radiusLG,
+                  ),
+                  topRight: Radius.circular(
+                    AppDesign.radiusLG,
+                  ),
+                ),
+                child: imageBytes != null
+                    ? Image.memory(
+                        imageBytes,
+                        fit: BoxFit.cover,
+                        gaplessPlayback: true,
+                      )
+                    : imageUrl != null
+                        ? Image.network(
+                            imageUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) {
+                              return Container(
+                                color: AppDesign.surfaceAlt,
+                                child: const Icon(
+                                  Icons.image_not_supported_outlined,
+                                  color: AppDesign.secondary,
+                                  size: 38,
+                                ),
+                              );
+                            },
+                          )
+                        : Container(
+                            color: AppDesign.surfaceAlt,
+                            child: const Icon(
+                              Icons.image_not_supported_outlined,
+                              color: AppDesign.secondary,
+                              size: 38,
+                            ),
+                          ),
+              ),
+            ),
+
+            // ----------------------------------------------------
+            // Content
+            // ----------------------------------------------------
+
+            Padding(
+              padding: const EdgeInsets.all(
+                AppDesign.spaceMD,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Recommendation badge
+
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppDesign.primary.withOpacity(0.10),
+                        borderRadius: BorderRadius.circular(
+                          AppDesign.radiusLG,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        textDirection: TextDirection.rtl,
+                        children: [
+                          Icon(
+                            Icons.auto_awesome,
+                            size: 14,
+                            color: AppDesign.primary,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            'مناسب لك',
+                            style: AppDesign.captionStyle.copyWith(
+                              color: AppDesign.primary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // Gender
+
+                  _recommendedInfoLine(
+                    Icons.wc_outlined,
+                    gender,
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  // Age / Size
+
+                  _recommendedInfoLine(
+                    ageGroup.contains('بالغون')
+                        ? Icons.straighten_outlined
+                        : Icons.cake_outlined,
+                    ageGroup.contains('بالغون')
+                        ? (generalSize.trim().isNotEmpty ? generalSize : '-')
+                        : ageGroup,
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  // Number of items
+
+                  _recommendedInfoLine(
+                    Icons.inventory_2_outlined,
+                    '$numberOfItems قطع',
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // View button
+
+                  SizedBox(
+                    width: double.infinity,
+                    height: 42,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => BeneficiaryViewDonationPage(
+                              boxId: boxId,
+                              userId: widget.userId,
+                            ),
+                          ),
+                        );
+                      },
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text(
+                            'عرض التبرع',
+                          ),
+                          const SizedBox(width: 6),
+                          const Icon(
+                            Icons.arrow_back_ios_new,
+                            size: 14,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // Recommended Info Line
+  // ============================================================
+
+  Widget _recommendedInfoLine(
+    IconData icon,
+    String text,
+  ) {
+    return Row(
+      textDirection: TextDirection.rtl,
+      children: [
+        Icon(
+          icon,
+          size: 17,
+          color: AppDesign.primary,
+        ),
+        const SizedBox(width: 7),
+        Expanded(
+          child: Text(
+            text,
+            textAlign: TextAlign.right,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppDesign.captionStyle.copyWith(
+              color: AppDesign.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ============================================================
+  // Recommended Section
+  // ============================================================
+
+  Widget _buildRecommendedSection(
+    Map<String, dynamic> currentBox,
+  ) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _loadRecommendedDonations(
+        currentBox,
+      ),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(
+              vertical: AppDesign.spaceLG,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'قد يناسبك أيضًا',
+                  style: AppDesign.subtitleStyle.copyWith(
+                    color: AppDesign.primary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 15),
+                const Center(
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        if (snapshot.hasError ||
+            !snapshot.hasData ||
+            snapshot.data!.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        final recommendations = snapshot.data!;
+
+        return Padding(
+          padding: const EdgeInsets.only(
+            top: AppDesign.spaceXL,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // --------------------------------------------------
+              // Section title
+              // --------------------------------------------------
+
+              Row(
+                textDirection: TextDirection.rtl,
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: AppDesign.primary.withOpacity(0.10),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.auto_awesome,
+                      color: AppDesign.primary,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'قد يناسبك أيضًا',
+                          style: AppDesign.subtitleStyle.copyWith(
+                            color: AppDesign.textPrimary,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'تبرعات مشابهة قد تكون مناسبة لاحتياجك',
+                          style: AppDesign.captionStyle.copyWith(
+                            color: AppDesign.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 16),
+
+              // --------------------------------------------------
+              // Horizontal recommendations
+              // --------------------------------------------------
+
+              SizedBox(
+                height: 340,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  reverse: true,
+                  physics: const BouncingScrollPhysics(),
+                  itemCount: recommendations.length,
+                  itemBuilder: (context, index) {
+                    return _buildRecommendedCard(
+                      recommendations[index],
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ============================================================
+  // Build
+  // ============================================================
+
   @override
   Widget build(BuildContext context) {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: AppDesign.background,
+
+        // ======================================================
+        // App Bar
+        // ======================================================
+
         appBar: AppBar(
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
+            icon: const Icon(
+              Icons.arrow_back,
+            ),
             onPressed: () {
               Navigator.pop(context);
             },
           ),
           title: Text(
             'تفاصيل التبرع',
-            style: AppDesign.h2Style.copyWith(color: AppDesign.textPrimary),
+            style: AppDesign.h2Style.copyWith(
+              color: AppDesign.textPrimary,
+            ),
           ),
           centerTitle: true,
           backgroundColor: AppDesign.background,
           foregroundColor: AppDesign.textPrimary,
           elevation: 0,
         ),
+
+        // ======================================================
+        // Body
+        // ======================================================
+
         body: FutureBuilder<Map<String, dynamic>>(
           future: _donationDetailsFuture,
           builder: (context, snapshot) {
+            // --------------------------------------------------
+            // Loading
+            // --------------------------------------------------
+
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return const Center(
+                child: CircularProgressIndicator(),
+              );
             }
+
+            // --------------------------------------------------
+            // Error
+            // --------------------------------------------------
 
             if (snapshot.hasError) {
               return Center(
                 child: Padding(
-                  padding: const EdgeInsets.all(AppDesign.screenPadding),
+                  padding: const EdgeInsets.all(
+                    AppDesign.screenPadding,
+                  ),
                   child: Text(
                     'حدث خطأ أثناء تحميل تفاصيل التبرع\n${snapshot.error}',
                     textAlign: TextAlign.center,
@@ -344,67 +955,106 @@ class _BeneficiaryViewDonationPageState
               );
             }
 
+            // --------------------------------------------------
+            // No data
+            // --------------------------------------------------
+
             if (!snapshot.hasData) {
               return Center(
-                child: Text('لا توجد بيانات', style: AppDesign.bodyStyle),
+                child: Text(
+                  'لا توجد بيانات',
+                  style: AppDesign.bodyStyle,
+                ),
               );
             }
+
+            // --------------------------------------------------
+            // Data
+            // --------------------------------------------------
+
             final boxData = snapshot.data!['box'] as Map<String, dynamic>;
 
-            final items = snapshot.data!['items'] as List<Map<String, dynamic>>;
+            final items =
+                snapshot.data!['items'] as List<Map<String, dynamic>>;
 
             final gender = (boxData['gender'] ?? '-').toString();
-            final ageGroup = (boxData['ageGroup']?['label'] ?? '-').toString();
+
+            final ageGroup =
+                (boxData['ageGroup']?['label'] ?? '-').toString();
+
             final generalSize = (boxData['generalSize'] ?? '').toString();
+
             final numberOfItems = items.length;
+
+            // ==================================================
+            // Main Column
+            // ==================================================
 
             return Column(
               children: [
+                // ==================================================
+                // Scrollable content
+                // ==================================================
+
                 Expanded(
                   child: SingleChildScrollView(
                     padding: AppPadding.screen,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // ==========================================
+                        // Main donation information
+                        // ==========================================
+
                         Container(
                           width: double.infinity,
-                          padding: const EdgeInsets.all(AppDesign.cardPadding),
+                          padding: const EdgeInsets.all(
+                            AppDesign.cardPadding,
+                          ),
                           decoration: AppDesign.primaryCardDecoration,
                           child: Directionality(
                             textDirection: TextDirection.rtl,
                             child: Column(
                               children: [
-                                _infoRow(Icons.wc_outlined, "الجنس", gender),
-
+                                _infoRow(
+                                  Icons.wc_outlined,
+                                  'الجنس',
+                                  gender,
+                                ),
                                 const SizedBox(height: 12),
-
                                 if (ageGroup.contains('بالغون'))
                                   _infoRow(
                                     Icons.straighten_outlined,
-                                    "المقاس",
+                                    'المقاس',
                                     generalSize.trim().isNotEmpty
                                         ? generalSize
-                                        : "-",
+                                        : '-',
                                   )
                                 else
                                   _infoRow(
                                     Icons.cake_outlined,
-                                    "الفئة العمرية",
+                                    'الفئة العمرية',
                                     ageGroup,
                                   ),
-
                                 const SizedBox(height: 12),
-
                                 _infoRow(
                                   Icons.inventory_2_outlined,
-                                  "عدد القطع",
-                                  "$numberOfItems قطع",
+                                  'عدد القطع',
+                                  '$numberOfItems قطع',
                                 ),
                               ],
                             ),
                           ),
                         ),
-                        const SizedBox(height: AppDesign.spaceXL),
+
+                        const SizedBox(
+                          height: AppDesign.spaceXL,
+                        ),
+
+                        // ==========================================
+                        // Donation content title
+                        // ==========================================
+
                         Align(
                           alignment: Alignment.centerRight,
                           child: Text(
@@ -416,7 +1066,15 @@ class _BeneficiaryViewDonationPageState
                             ),
                           ),
                         ),
-                        const SizedBox(height: AppDesign.spaceMD),
+
+                        const SizedBox(
+                          height: AppDesign.spaceMD,
+                        ),
+
+                        // ==========================================
+                        // Items
+                        // ==========================================
+
                         if (items.isEmpty)
                           Container(
                             width: double.infinity,
@@ -435,13 +1093,32 @@ class _BeneficiaryViewDonationPageState
                         else
                           ...List.generate(
                             items.length,
-                            (index) => _buildItemCard(items[index], index),
+                            (index) => _buildItemCard(
+                              items[index],
+                              index,
+                            ),
                           ),
-                        const SizedBox(height: AppDesign.space2XL),
+
+                        // ==========================================
+                        // Recommended System
+                        // ==========================================
+
+                        _buildRecommendedSection(
+                          boxData,
+                        ),
+
+                        const SizedBox(
+                          height: AppDesign.space2XL,
+                        ),
                       ],
                     ),
                   ),
                 ),
+
+                // ==================================================
+                // Add to cart button
+                // ==================================================
+
                 SafeArea(
                   top: false,
                   child: Padding(
@@ -457,8 +1134,9 @@ class _BeneficiaryViewDonationPageState
                       child: ElevatedButton(
                         onPressed: _isAddingToCart
                             ? null
-                            : () => _addToCart(boxData),
-
+                            : () => _addToCart(
+                                  boxData,
+                                ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -467,9 +1145,7 @@ class _BeneficiaryViewDonationPageState
                                   ? 'جاري الإضافة...'
                                   : 'إضافة إلى السلة',
                             ),
-
                             const SizedBox(width: 8),
-
                             _isAddingToCart
                                 ? const SizedBox(
                                     width: 18,
@@ -479,7 +1155,9 @@ class _BeneficiaryViewDonationPageState
                                       color: Colors.white,
                                     ),
                                   )
-                                : const Icon(Icons.add_shopping_cart_outlined),
+                                : const Icon(
+                                    Icons.add_shopping_cart_outlined,
+                                  ),
                           ],
                         ),
                       ),
@@ -494,7 +1172,13 @@ class _BeneficiaryViewDonationPageState
     );
   }
 
-  void _showImagePreview(Uint8List imageBytes) {
+  // ============================================================
+  // Image Preview
+  // ============================================================
+
+  void _showImagePreview(
+    Uint8List imageBytes,
+  ) {
     final size = MediaQuery.of(context).size.width * 0.75;
 
     showDialog(
