@@ -16,6 +16,9 @@ import 'Beneficiary_home_page.dart';
 import 'add_donation_page.dart';
 import 'delivery_method_page.dart';
 import 'courier_home_page.dart';
+import 'admin_home_page.dart';
+import 'admin_beneficiaries_page.dart';
+import 'courier_management_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,8 +40,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppDesign.lightTheme,
 
-      home: user == null ? const WelcomePage() : const AuthGate(),
-
+      home: AdminHomePage(userId: userId),
       routes: {
         '/login': (context) => const LoginPage(),
         '/roleSelection': (context) => const RoleSelectionPage(),
@@ -101,6 +103,20 @@ class MyApp extends StatelessWidget {
               '';
 
           return CourierHomePage(userId: uid);
+        },
+        // صفحة إدارة المستفيدين
+        '/adminBeneficiaries': (context) {
+          final uid =
+              (ModalRoute.of(context)?.settings.arguments as String?) ??
+              FirebaseAuth.instance.currentUser?.uid ??
+              '';
+
+          return AdminBeneficiariesPage(userId: uid);
+        },
+
+        // صفحة إدارة المناديب
+        '/adminCouriers': (context) {
+          return const CourierManagementPage();
         },
       },
     );
