@@ -15,13 +15,65 @@ class CourierManagementPage extends StatefulWidget {
 class _CourierManagementPageState extends State<CourierManagementPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // =========================
-  // Delete Courier
-  // =========================
+  Stream<QuerySnapshot<Map<String, dynamic>>> _couriersStream() {
+    return _firestore.collection('couriers').snapshots();
+  }
 
-  Future<void> deleteCourier(String courierId) async {
+  String _getStatus(Map<String, dynamic> data) {
+    final status = (data['statues'] ?? data['status'] ?? 'غير محدد')
+        .toString()
+        .trim();
+
+    return status.isEmpty ? 'غير محدد' : status;
+  }
+
+  String _displayStatus(String status) {
+    switch (status.toLowerCase()) {
+      case 'active':
+        return 'نشط';
+      case 'inactive':
+        return 'غير نشط';
+      default:
+        return status;
+    }
+  }
+
+  bool _isActive(String status) {
+    return status.toLowerCase() == 'active' || status == 'نشط';
+  }
+
+  // إضافة مندوب
+  Future<void> _addCourier() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AddCourierPage()),
+    );
+
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  // تعديل بيانات المندوب
+  Future<void> _editCourier({
+    required String courierId,
+    required String userId,
+  }) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EditCourierPage(courierId: courierId, userId: userId),
+      ),
+    );
+
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  // حذف المندوب
+  Future<void> _deleteCourier(String courierId) async {
     try {
-      // جلب بيانات السائق لمعرفة userID
       final courierDoc = await _firestore
           .collection('couriers')
           .doc(courierId)
@@ -30,66 +82,49 @@ class _CourierManagementPageState extends State<CourierManagementPage> {
       if (!courierDoc.exists) {
         if (!mounted) return;
 
-        AppDesign.showErrorSnackBar(context, 'بيانات السائق غير موجودة');
-
+        AppDesign.showErrorSnackBar(context, 'بيانات المندوب غير موجودة');
         return;
       }
 
-      final courierData = courierDoc.data() as Map<String, dynamic>;
+      final data = courierDoc.data() ?? <String, dynamic>{};
+      final userId = data['userID']?.toString() ?? '';
 
-      final userId = courierData['userID']?.toString() ?? '';
-
-      // إنشاء Batch للحذف
       final batch = _firestore.batch();
 
-      // حذف بيانات السائق من couriers
-      final courierRef = _firestore.collection('couriers').doc(courierId);
+      batch.delete(_firestore.collection('couriers').doc(courierId));
 
-      batch.delete(courierRef);
-
-      // حذف بيانات المستخدم من Users
       if (userId.isNotEmpty) {
-        final userRef = _firestore.collection('Users').doc(userId);
-
-        batch.delete(userRef);
+        batch.delete(_firestore.collection('Users').doc(userId));
       }
 
-      // تنفيذ الحذف
       await batch.commit();
 
       if (!mounted) return;
 
-      AppDesign.showSuccessSnackBar(context, 'تم حذف السائق بنجاح');
+      AppDesign.showSuccessSnackBar(context, 'تم حذف المندوب بنجاح');
     } catch (e) {
       debugPrint('Delete Courier Error: $e');
 
       if (!mounted) return;
 
-      AppDesign.showErrorSnackBar(context, 'حدث خطأ أثناء حذف السائق');
+      AppDesign.showErrorSnackBar(context, 'حدث خطأ أثناء حذف المندوب');
     }
   }
 
-  // =========================
-  // Delete Confirmation
-  // =========================
-
-  Future<void> showDeleteDialog(String courierId, String courierName) async {
+  // تأكيد الحذف
+  Future<void> _showDeleteDialog(String courierId, String courierName) async {
     final confirmed = await AppDesign.showAppDialog(
       context: context,
-      title: 'حذف السائق',
+      title: 'حذف المندوب',
       message: 'هل أنت متأكد من حذف هذا المندوب؟',
       confirmText: 'حذف',
       cancelText: 'إلغاء',
     );
 
     if (confirmed) {
-      await deleteCourier(courierId);
+      await _deleteCourier(courierId);
     }
   }
-
-  // =========================
-  // Build
-  // =========================
 
   @override
   Widget build(BuildContext context) {
@@ -98,384 +133,489 @@ class _CourierManagementPageState extends State<CourierManagementPage> {
       child: Scaffold(
         backgroundColor: AppDesign.background,
 
-        appBar: AppBar(title: const Text('إدارة السائقين'), centerTitle: true),
+        // موقع زر الإضافة أسفل اليمين
+        floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
 
-        // =========================
-        // Add Courier
-        // =========================
         floatingActionButton: FloatingActionButton(
+          onPressed: _addCourier,
           backgroundColor: AppDesign.primary,
-
-          onPressed: () async {
-            await Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AddCourierPage()),
-            );
-
-            // إعادة تحميل القائمة بعد إضافة سائق
-            if (mounted) {
-              setState(() {});
-            }
-          },
-
-          child: const Icon(Icons.add, color: Colors.white),
+          foregroundColor: AppDesign.white,
+          elevation: 3,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: const Icon(Icons.add, size: 30),
         ),
 
-        // =========================
-        // Courier List
-        // =========================
-        body: StreamBuilder<QuerySnapshot>(
-          stream: _firestore.collection('couriers').snapshots(),
+        body: SafeArea(
+          child: Column(
+            children: [
+              _buildHeader(),
 
-          builder: (context, snapshot) {
-            // Loading
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
+              const SizedBox(height: 18),
 
-            // Error
-            if (snapshot.hasError) {
-              return Center(
-                child: Text(
-                  'حدث خطأ أثناء تحميل السائقين',
-                  style: AppDesign.bodyStyle,
-                ),
-              );
-            }
-
-            final courierDocs = snapshot.data?.docs ?? [];
-
-            // Empty
-            if (courierDocs.isEmpty) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.local_shipping_outlined,
-                      size: 70,
-                      color: AppDesign.textSecondary,
-                    ),
-
-                    AppGap.md,
-
-                    Text('لا يوجد سائقون حاليًا', style: AppDesign.h2Style),
-
-                    AppGap.sm,
-
-                    Text(
-                      'اضغط + لإضافة سائق جديد',
-                      style: AppDesign.bodySecondaryStyle,
-                    ),
-                  ],
-                ),
-              );
-            }
-
-            // =========================
-            // Courier List
-            // =========================
-
-            return ListView.builder(
-              padding: AppPadding.screen,
-              itemCount: courierDocs.length,
-
-              itemBuilder: (context, index) {
-                final courierDoc = courierDocs[index];
-
-                final courierData = courierDoc.data() as Map<String, dynamic>;
-
-                // userID الموجود في couriers
-                final userId = courierData['userID']?.toString() ?? '';
-
-                // statues الموجود في Firebase
-                final status =
-                    courierData['statues']?.toString().trim().isNotEmpty == true
-                    ? courierData['statues'].toString()
-                    : 'غير محدد';
-
-                // إذا userID غير موجود
-                if (userId.isEmpty) {
-                  return _buildInvalidCourierCard(courierDoc.id, status);
-                }
-
-                // =========================
-                // Get User Data
-                // =========================
-
-                return FutureBuilder<DocumentSnapshot>(
-                  future: _firestore.collection('Users').doc(userId).get(),
-
-                  builder: (context, userSnapshot) {
-                    // Loading user data
-                    if (userSnapshot.connectionState ==
-                        ConnectionState.waiting) {
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        child: const Padding(
-                          padding: EdgeInsets.all(20),
-                          child: Center(child: CircularProgressIndicator()),
+              Expanded(
+                child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: _couriersStream(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(
+                        child: CircularProgressIndicator(
+                          color: AppDesign.primary,
                         ),
                       );
                     }
 
-                    String firstName = '';
-                    String lastName = '';
-                    String phone = '';
-
-                    if (userSnapshot.hasData && userSnapshot.data!.exists) {
-                      final userData =
-                          userSnapshot.data!.data() as Map<String, dynamic>;
-
-                      firstName = userData['firstName']?.toString() ?? '';
-
-                      lastName = userData['lastName']?.toString() ?? '';
-
-                      phone = userData['phone']?.toString() ?? '';
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: Text(
+                          'حدث خطأ أثناء تحميل المناديب',
+                          style: AppDesign.bodyStyle.copyWith(
+                            color: AppDesign.textSecondary,
+                          ),
+                        ),
+                      );
                     }
 
-                    final courierName = '$firstName $lastName'.trim();
+                    final docs = snapshot.data?.docs ?? [];
 
-                    return _buildCourierCard(
-                      courierId: courierDoc.id,
-                      userId: userId,
-                      courierName: courierName.isEmpty
-                          ? 'اسم غير متوفر'
-                          : courierName,
-                      phone: phone,
-                      status: status,
+                    if (docs.isEmpty) {
+                      return _buildEmptyState();
+                    }
+
+                    return ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(20, 5, 20, 100),
+                      itemCount: docs.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
+                        final doc = docs[index];
+                        final data = doc.data();
+
+                        final userId = data['userID']?.toString() ?? '';
+
+                        final status = _getStatus(data);
+
+                        if (userId.isEmpty) {
+                          return _buildInvalidCourierCard(doc.id, status);
+                        }
+
+                        return FutureBuilder<
+                          DocumentSnapshot<Map<String, dynamic>>
+                        >(
+                          future: _firestore
+                              .collection('Users')
+                              .doc(userId)
+                              .get(),
+                          builder: (context, userSnapshot) {
+                            if (userSnapshot.connectionState ==
+                                ConnectionState.waiting) {
+                              return _buildLoadingCard();
+                            }
+
+                            final userData = userSnapshot.data?.data() ?? {};
+
+                            final firstName = (userData['firstName'] ?? '')
+                                .toString();
+
+                            final lastName = (userData['lastName'] ?? '')
+                                .toString();
+
+                            final name = '$firstName $lastName'.trim();
+
+                            final phone =
+                                (userData['phoneNumber'] ??
+                                        userData['phone'] ??
+                                        'غير متوفر')
+                                    .toString();
+
+                            final completedDeliveries =
+                                (data['completedDeliveries'] as num?)
+                                    ?.toInt() ??
+                                0;
+
+                            return _buildCourierCard(
+                              courierId: doc.id,
+                              userId: userId,
+                              courierName: name.isEmpty
+                                  ? 'اسم غير متوفر'
+                                  : name,
+                              phone: phone,
+                              status: status,
+                              completedDeliveries: completedDeliveries,
+                            );
+                          },
+                        );
+                      },
                     );
                   },
-                );
-              },
-            );
-          },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // =========================
-  // Courier Card
-  // =========================
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
+      child: SizedBox(
+        height: 48,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Center(
+              child: Text(
+                'إدارة المناديب',
+                textAlign: TextAlign.center,
+                style: AppDesign.h1Style.copyWith(
+                  color: AppDesign.primary,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
 
+            Positioned(
+              left: 0,
+              child: IconButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+                icon: const Icon(
+                  Icons.arrow_back,
+                  textDirection: TextDirection.ltr,
+                  color: AppDesign.primary,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // حالة عدم وجود مناديب
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.local_shipping_outlined,
+              size: 70,
+              color: AppDesign.textSecondary,
+            ),
+
+            AppGap.md,
+
+            Text('لا يوجد مناديب حاليًا', style: AppDesign.h2Style),
+
+            AppGap.sm,
+
+            Text(
+              'اضغط على + لإضافة مندوب جديد',
+              style: AppDesign.bodySecondaryStyle,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // بطاقة التحميل
+  Widget _buildLoadingCard() {
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: AppDesign.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppDesign.border),
+      ),
+      child: const Center(
+        child: CircularProgressIndicator(color: AppDesign.primary),
+      ),
+    );
+  }
+
+  // بطاقة بيانات المندوب
   Widget _buildCourierCard({
     required String courierId,
     required String userId,
     required String courierName,
     required String phone,
     required String status,
+    required int completedDeliveries,
   }) {
-    final isActive = status.toLowerCase() == 'active' || status == 'نشط';
+    final firstLetter = courierName.trim().isNotEmpty
+        ? courierName.trim()[0]
+        : 'م';
 
-    final displayedStatus = status.toLowerCase() == 'active'
-        ? 'نشط'
-        : status.toLowerCase() == 'inactive'
-        ? 'غير نشط'
-        : status;
+    final active = _isActive(status);
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppDesign.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppDesign.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.035),
+            blurRadius: 12,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
 
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-
-        child: Column(
-          children: [
-            // =========================
-            // Name + Status
-            // =========================
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 25,
-                  backgroundColor: AppDesign.primary,
-
-                  child: const Icon(Icons.person, color: Colors.white),
-                ),
-
-                AppGap.sm,
-
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-
-                    children: [
-                      Text(courierName, style: AppDesign.h2Style),
-
-                      const SizedBox(height: 4),
-
-                      Text(
-                        phone.isEmpty ? 'رقم الجوال غير متوفر' : phone,
-                        style: AppDesign.bodySecondaryStyle,
-                      ),
-                    ],
+      child: Column(
+        children: [
+          // الاسم ورقم الجوال والصورة والحالة
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 25,
+                backgroundColor: AppDesign.secondary.withOpacity(0.17),
+                child: Text(
+                  firstLetter,
+                  style: AppDesign.h1Style.copyWith(
+                    color: AppDesign.primary,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
+              ),
 
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
+              const SizedBox(width: 14),
 
-                  decoration: BoxDecoration(
-                    color: isActive ? AppDesign.softGreen : AppDesign.secondary,
-
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-
-                  child: Text(
-                    displayedStatus,
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
-                  ),
-                ),
-              ],
-            ),
-
-            AppGap.md,
-
-            const Divider(),
-
-            AppGap.sm,
-
-            // =========================
-            // Completed Deliveries
-            // =========================
-            FutureBuilder<DocumentSnapshot>(
-              future: _firestore.collection('couriers').doc(courierId).get(),
-
-              builder: (context, snapshot) {
-                int completedDeliveries = 0;
-
-                if (snapshot.hasData && snapshot.data!.exists) {
-                  final data = snapshot.data!.data() as Map<String, dynamic>;
-
-                  completedDeliveries =
-                      data['completedDeliveries'] as int? ?? 0;
-                }
-
-                return Row(
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(
-                      Icons.local_shipping_outlined,
-                      color: AppDesign.primary,
-                    ),
-
-                    AppGap.sm,
-
                     Text(
-                      'الرحلات المكتملة: ',
-                      style: AppDesign.bodySecondaryStyle,
+                      courierName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppDesign.h1Style.copyWith(
+                        color: AppDesign.primary,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
 
-                    Text('$completedDeliveries', style: AppDesign.bodyStyle),
-                  ],
-                );
-              },
-            ),
+                    const SizedBox(height: 6),
 
-            AppGap.md,
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.phone_outlined,
+                          size: 16,
+                          color: AppDesign.textSecondary,
+                        ),
 
-            // =========================
-            // Buttons
-            // =========================
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => EditCourierPage(
-                            courierId: courierId,
-                            userId: userId,
+                        const SizedBox(width: 5),
+
+                        Expanded(
+                          child: Text(
+                            phone,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppDesign.bodyStyle.copyWith(
+                              color: AppDesign.textSecondary,
+                              fontSize: 13,
+                            ),
                           ),
                         ),
-                      );
+                      ],
+                    ),
+                  ],
+                ),
+              ),
 
-                      // إعادة تحميل البيانات بعد التعديل
-                      if (mounted) {
-                        setState(() {});
-                      }
-                    },
+              const SizedBox(width: 7),
 
-                    icon: const Icon(Icons.edit_outlined),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: active
+                      ? AppDesign.softGreen.withOpacity(0.25)
+                      : AppDesign.secondary.withOpacity(0.16),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  _displayStatus(status),
+                  style: AppDesign.bodyStyle.copyWith(
+                    color: AppDesign.primary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
 
+          const SizedBox(height: 16),
+
+          Divider(color: AppDesign.border, height: 1),
+
+          const SizedBox(height: 14),
+
+          // الرحلات المكتملة
+          Row(
+            children: [
+              const Icon(
+                Icons.local_shipping_outlined,
+                size: 20,
+                color: AppDesign.primary,
+              ),
+
+              const SizedBox(width: 8),
+
+              Expanded(
+                child: Text(
+                  'الرحلات المكتملة',
+                  style: AppDesign.bodySecondaryStyle,
+                ),
+              ),
+
+              Text(
+                '$completedDeliveries',
+                style: AppDesign.bodyStyle.copyWith(
+                  color: AppDesign.primary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          // أزرار التعديل والحذف
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 54,
+                  child: OutlinedButton.icon(
+                    onPressed: () =>
+                        _editCourier(courierId: courierId, userId: userId),
+                    icon: const Icon(Icons.edit_outlined, size: 19),
                     label: const Text('تعديل'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppDesign.primary,
+                      side: const BorderSide(
+                        color: AppDesign.primary,
+                        width: 1,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(22),
+                      ),
+                      textStyle: AppDesign.bodyStyle.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
                 ),
+              ),
 
-                AppGap.sm,
+              const SizedBox(width: 8),
 
-                Expanded(
+              Expanded(
+                child: SizedBox(
+                  height: 54,
                   child: ElevatedButton.icon(
-                    onPressed: () {
-                      showDeleteDialog(courierId, courierName);
-                    },
-
-                    icon: const Icon(Icons.delete_outline),
-
+                    onPressed: () => _showDeleteDialog(courierId, courierName),
+                    icon: const Icon(Icons.delete_outline, size: 19),
                     label: const Text('حذف'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppDesign.primary,
+                      foregroundColor: AppDesign.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(22),
+                      ),
+                      textStyle: AppDesign.bodyStyle.copyWith(
+                        color: AppDesign.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
                 ),
-              ],
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  // =========================
-  // Invalid Courier Card
-  // =========================
-
+  // بطاقة المندوب الذي لا يرتبط بحساب مستخدم
   Widget _buildInvalidCourierCard(String courierId, String status) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppDesign.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppDesign.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.035),
+            blurRadius: 12,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
 
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          const Icon(
+            Icons.warning_amber_rounded,
+            size: 45,
+            color: Colors.orange,
+          ),
 
-        child: Column(
-          children: [
-            const Icon(
-              Icons.warning_amber_rounded,
-              size: 45,
-              color: Colors.orange,
-            ),
+          AppGap.sm,
 
-            AppGap.sm,
+          Text('بيانات المندوب غير مكتملة', style: AppDesign.h2Style),
 
-            Text('بيانات السائق غير مكتملة', style: AppDesign.h2Style),
+          AppGap.sm,
 
-            AppGap.sm,
+          Text(
+            'لم يتم ربط هذا المندوب بحساب مستخدم.',
+            textAlign: TextAlign.center,
+            style: AppDesign.bodySecondaryStyle,
+          ),
 
-            Text(
-              'لم يتم ربط هذا السائق بحساب مستخدم.',
-              textAlign: TextAlign.center,
-              style: AppDesign.bodySecondaryStyle,
-            ),
+          AppGap.sm,
 
-            AppGap.sm,
+          Text('الحالة: ${_displayStatus(status)}', style: AppDesign.bodyStyle),
 
-            Text('الحالة: $status', style: AppDesign.bodyStyle),
+          AppGap.md,
 
-            AppGap.md,
-
-            ElevatedButton.icon(
-              onPressed: () {
-                showDeleteDialog(courierId, 'هذا السائق');
-              },
-
+          SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: ElevatedButton.icon(
+              onPressed: () => _showDeleteDialog(courierId, 'هذا المندوب'),
               icon: const Icon(Icons.delete_outline),
-
               label: const Text('حذف'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppDesign.primary,
+                foregroundColor: AppDesign.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(22),
+                ),
+              ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
