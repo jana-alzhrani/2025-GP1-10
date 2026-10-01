@@ -15,7 +15,9 @@ class _AddCourierPageState extends State<AddCourierPage> {
   final firstNameController = TextEditingController();
   final lastNameController = TextEditingController();
   final phoneController = TextEditingController();
-  final cityController = TextEditingController();
+
+  // المدينة الافتراضية
+  final cityController = TextEditingController(text: 'Riyadh');
 
   final String status = 'active';
 
@@ -23,86 +25,41 @@ class _AddCourierPageState extends State<AddCourierPage> {
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // رسائل الأخطاء
   String? firstNameError;
   String? lastNameError;
   String? phoneError;
   String? cityError;
 
-  // لمنع استخدام نتيجة فحص رقم قديم
-  int phoneCheckRequestId = 0;
-
   // =========================
-  // التحقق الفوري من رقم الجوال
+  // فحص تكرار رقم الجوال
   // =========================
-  Future<void> checkPhoneExists(String value) async {
-    final phone = value.trim();
-    final requestId = ++phoneCheckRequestId;
+  Future<bool> _phoneExists(String phone) async {
+    final normalizedPhone = '+966${phone.substring(1)}';
+    final withoutPlus = normalizedPhone.replaceFirst('+', '');
 
-    // إذا كان الحقل فارغًا أو الرقم غير مكتمل
-    if (phone.isEmpty || phone.length < 10) {
-      if (!mounted) return;
+    final phoneValues = [phone, normalizedPhone, withoutPlus];
 
-      setState(() {
-        phoneError = null;
-      });
-      return;
-    }
+    for (final field in ['phone', 'phoneNumber']) {
+      for (final value in phoneValues) {
+        final result = await _firestore
+            .collection('Users')
+            .where(field, isEqualTo: value)
+            .limit(1)
+            .get();
 
-    // التحقق من صيغة رقم الجوال السعودي
-    if (!RegExp(r'^05[0-9]{8}$').hasMatch(phone)) {
-      if (!mounted) return;
-
-      setState(() {
-        phoneError = 'رقم الجوال غير صحيح';
-      });
-      return;
-    }
-
-    if (!mounted) return;
-
-    setState(() {
-      phoneError = null;
-    });
-
-    try {
-      final normalizedPhone = '+966${phone.substring(1)}';
-
-      // البحث عن الرقم بالصيغة المحلية
-      final phoneCheck = await _firestore
-          .collection('Users')
-          .where('phone', isEqualTo: phone)
-          .limit(1)
-          .get();
-
-      // البحث عن الرقم بالصيغة الدولية
-      final normalizedPhoneCheck = await _firestore
-          .collection('Users')
-          .where('phoneNumber', isEqualTo: normalizedPhone)
-          .limit(1)
-          .get();
-
-      // تجاهل نتيجة الفحص إذا تغيّر الرقم أثناء البحث
-      if (!mounted || requestId != phoneCheckRequestId) return;
-
-      setState(() {
-        if (phoneCheck.docs.isNotEmpty ||
-            normalizedPhoneCheck.docs.isNotEmpty) {
-          phoneError = 'رقم الجوال مسجل مسبقًا';
-        } else {
-          phoneError = null;
+        if (result.docs.isNotEmpty) {
+          return true;
         }
-      });
-    } catch (e) {
-      debugPrint('Phone duplicate check error: $e');
-
-      // لا نمسح أي رسالة خطأ موجودة بسبب فشل الاتصال
+      }
     }
+
+    return false;
   }
 
   // =========================
-  // Add Courier
+  // إضافة السائق
   // =========================
+
   Future<void> addCourier() async {
     FocusScope.of(context).unfocus();
 
@@ -113,13 +70,13 @@ class _AddCourierPageState extends State<AddCourierPage> {
 
     bool hasError = false;
 
+    // التحقق من جميع الحقول عند الضغط على الزر
     setState(() {
       firstNameError = null;
       lastNameError = null;
       phoneError = null;
       cityError = null;
 
-      // الاسم الأول
       if (firstName.isEmpty) {
         firstNameError = 'الرجاء تعبئة الحقل';
         hasError = true;
@@ -128,7 +85,6 @@ class _AddCourierPageState extends State<AddCourierPage> {
         hasError = true;
       }
 
-      // اسم العائلة
       if (lastName.isEmpty) {
         lastNameError = 'الرجاء تعبئة الحقل';
         hasError = true;
@@ -137,7 +93,6 @@ class _AddCourierPageState extends State<AddCourierPage> {
         hasError = true;
       }
 
-      // رقم الجوال
       if (phone.isEmpty) {
         phoneError = 'الرجاء تعبئة الحقل';
         hasError = true;
@@ -146,61 +101,70 @@ class _AddCourierPageState extends State<AddCourierPage> {
         hasError = true;
       }
 
-      // المدينة
       if (city.isEmpty) {
         cityError = 'الرجاء تعبئة الحقل';
         hasError = true;
       }
     });
 
-    if (hasError) return;
-
     setState(() {
       isLoading = true;
     });
 
     try {
-      final normalizedPhone = '+966${phone.substring(1)}';
+      // نفحص تكرار الجوال حتى لو كانت الحقول الأخرى فيها أخطاء
+      final phoneIsValid = RegExp(r'^05[0-9]{8}$').hasMatch(phone);
 
-      // إعادة فحص الرقم قبل الحفظ للتأكد من عدم تكراره
-      final phoneCheck = await _firestore
-          .collection('Users')
-          .where('phone', isEqualTo: phone)
-          .limit(1)
-          .get();
+      if (phoneIsValid) {
+        final normalizedPhone = '+966${phone.substring(1)}';
 
-      final normalizedPhoneCheck = await _firestore
-          .collection('Users')
-          .where('phoneNumber', isEqualTo: normalizedPhone)
-          .limit(1)
-          .get();
+        final checks = await Future.wait([
+          _firestore
+              .collection('Users')
+              .where('phone', isEqualTo: phone)
+              .limit(1)
+              .get(),
+          _firestore
+              .collection('Users')
+              .where('phone', isEqualTo: normalizedPhone)
+              .limit(1)
+              .get(),
+          _firestore
+              .collection('Users')
+              .where('phoneNumber', isEqualTo: phone)
+              .limit(1)
+              .get(),
+          _firestore
+              .collection('Users')
+              .where('phoneNumber', isEqualTo: normalizedPhone)
+              .limit(1)
+              .get(),
+        ]);
 
-      if (phoneCheck.docs.isNotEmpty || normalizedPhoneCheck.docs.isNotEmpty) {
-        if (!mounted) return;
+        final phoneExists = checks.any((result) => result.docs.isNotEmpty);
 
-        setState(() {
-          phoneError = 'رقم الجوال مسجل مسبقًا';
-        });
+        if (phoneExists) {
+          if (!mounted) return;
 
-        return;
+          setState(() {
+            phoneError = 'رقم الجوال مسجل مسبقًا';
+          });
+
+          return;
+        }
       }
 
-      // =========================
-      // Create IDs
-      // =========================
+      // بعد فحص الجوال، نوقف الإضافة إذا بقيت أخطاء أخرى
+      if (hasError) return;
+
+      final normalizedPhone = '+966${phone.substring(1)}';
+
       final userRef = _firestore.collection('Users').doc();
       final courierRef = _firestore.collection('couriers').doc();
-
       final userId = userRef.id;
 
-      // =========================
-      // Batch
-      // =========================
       final batch = _firestore.batch();
 
-      // =========================
-      // Users Document
-      // =========================
       batch.set(userRef, {
         'userId': userId,
         'firstName': firstName,
@@ -211,9 +175,6 @@ class _AddCourierPageState extends State<AddCourierPage> {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // =========================
-      // Courier Document
-      // =========================
       batch.set(courierRef, {
         'userID': userId,
         'statues': status,
@@ -221,15 +182,11 @@ class _AddCourierPageState extends State<AddCourierPage> {
         'completedDeliveries': 0,
       });
 
-      // =========================
-      // Save Both Documents
-      // =========================
       await batch.commit();
 
       if (!mounted) return;
 
       AppDesign.showSuccessSnackBar(context, 'تم إضافة السائق بنجاح');
-
       Navigator.pop(context);
     } catch (e) {
       debugPrint('Add Courier Error: $e');
@@ -247,7 +204,7 @@ class _AddCourierPageState extends State<AddCourierPage> {
   }
 
   // =========================
-  // Dispose
+  // تنظيف الحقول
   // =========================
   @override
   void dispose() {
@@ -260,7 +217,7 @@ class _AddCourierPageState extends State<AddCourierPage> {
   }
 
   // =========================
-  // Build
+  // تصميم الصفحة
   // =========================
   @override
   Widget build(BuildContext context) {
@@ -268,56 +225,54 @@ class _AddCourierPageState extends State<AddCourierPage> {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: AppDesign.background,
-        appBar: AppBar(title: const Text('إضافة سائق'), centerTitle: true),
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          titleSpacing: 0,
+          title: SizedBox(
+            height: 48,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                const Center(child: Text('إضافة سائق')),
+                Positioned(
+                  left: 0,
+                  child: IconButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                    },
+                    icon: const Icon(
+                      Icons.arrow_back,
+                      textDirection: TextDirection.ltr,
+                      color: AppDesign.primary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
         body: SingleChildScrollView(
           padding: AppPadding.screen,
           child: Column(
             children: [
-              // الاسم الأول
               _buildField(
                 controller: firstNameController,
                 label: 'الاسم الأول',
                 icon: Icons.person_outline,
                 errorText: firstNameError,
-                onChanged: (value) {
-                  setState(() {
-                    if (value.trim().isEmpty) {
-                      firstNameError = 'الرجاء تعبئة الحقل';
-                    } else if (value.trim().length < 2 ||
-                        value.trim().length > 50) {
-                      firstNameError = 'يجب أن يكون الاسم بين 2 و50 حرفًا';
-                    } else {
-                      firstNameError = null;
-                    }
-                  });
-                },
               ),
 
               AppGap.md,
 
-              // اسم العائلة
               _buildField(
                 controller: lastNameController,
                 label: 'اسم العائلة',
                 icon: Icons.person_outline,
                 errorText: lastNameError,
-                onChanged: (value) {
-                  setState(() {
-                    if (value.trim().isEmpty) {
-                      lastNameError = 'الرجاء تعبئة الحقل';
-                    } else if (value.trim().length < 2 ||
-                        value.trim().length > 50) {
-                      lastNameError = 'يجب أن يكون الاسم بين 2 و50 حرفًا';
-                    } else {
-                      lastNameError = null;
-                    }
-                  });
-                },
               ),
 
               AppGap.md,
 
-              // رقم الجوال
               _buildField(
                 controller: phoneController,
                 label: 'رقم الجوال',
@@ -326,31 +281,20 @@ class _AddCourierPageState extends State<AddCourierPage> {
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 maxLength: 10,
                 errorText: phoneError,
-                onChanged: (value) {
-                  checkPhoneExists(value);
-                },
               ),
 
               AppGap.md,
 
-              // المدينة
               _buildField(
                 controller: cityController,
                 label: 'المدينة',
                 icon: Icons.location_on_outlined,
                 errorText: cityError,
-                onChanged: (value) {
-                  setState(() {
-                    cityError = value.trim().isEmpty
-                        ? 'الرجاء تعبئة الحقل'
-                        : null;
-                  });
-                },
+                readOnly: true,
               ),
 
               AppGap.lg,
 
-              // زر إضافة السائق
               SizedBox(
                 width: double.infinity,
                 height: 55,
@@ -373,7 +317,7 @@ class _AddCourierPageState extends State<AddCourierPage> {
   }
 
   // =========================
-  // Text Field
+  // تصميم حقول الإدخال
   // =========================
   Widget _buildField({
     required TextEditingController controller,
@@ -384,9 +328,11 @@ class _AddCourierPageState extends State<AddCourierPage> {
     TextInputType? keyboardType,
     List<TextInputFormatter>? inputFormatters,
     int? maxLength,
+    bool readOnly = false,
   }) {
     return TextField(
       controller: controller,
+      readOnly: readOnly,
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,
       maxLength: maxLength,
