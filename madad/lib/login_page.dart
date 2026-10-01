@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'signup_page.dart';
 import 'otp_page.dart';
 import 'app_design.dart';
 
@@ -184,17 +183,38 @@ class _LoginPageState extends State<LoginPage> {
 
                     AppGap.md,
 
-                    TextButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => SignUpPage()),
-                        );
-                      },
-                      child: Text(
-                        "ليس لديك حساب؟ إنشاء حساب",
-                        style: AppDesign.bodySecondaryStyle,
-                      ),
+                    Row(
+                      textDirection: TextDirection.rtl,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          "ليس لديك حساب؟",
+                          style: AppDesign.bodySecondaryStyle,
+                        ),
+                        const SizedBox(width: 4),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pushNamed(context, '/roleSelection');
+                          },
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppDesign.primary,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 8,
+                            ),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: Text(
+                            "إنشاء حساب",
+                            style: AppDesign.bodyStyle.copyWith(
+                              color: AppDesign.primary,
+                              fontWeight: FontWeight.w700,
+                              decoration: TextDecoration.none,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
