@@ -22,7 +22,9 @@ class _EditCourierPageState extends State<EditCourierPage> {
   final firstNameController = TextEditingController();
   final lastNameController = TextEditingController();
   final phoneController = TextEditingController();
-  final cityController = TextEditingController();
+
+  // المدينة ثابتة باللغة الإنجليزية
+  final cityController = TextEditingController(text: 'Riyadh');
 
   String status = 'active';
 
@@ -31,7 +33,7 @@ class _EditCourierPageState extends State<EditCourierPage> {
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // رسائل الخطأ أسفل الحقول
+  // رسائل الخطأ
   String? firstNameError;
   String? lastNameError;
   String? phoneError;
@@ -47,9 +49,8 @@ class _EditCourierPageState extends State<EditCourierPage> {
   }
 
   // =========================
-  // Load Courier
+  // تحميل بيانات المندوب
   // =========================
-
   Future<void> loadCourier() async {
     try {
       final userDoc = await _firestore
@@ -83,12 +84,13 @@ class _EditCourierPageState extends State<EditCourierPage> {
           userData['phoneNumber']?.toString() ??
           '';
 
-      // تحويل الرقم الدولي إلى الصيغة المحلية للعرض
+      // تحويل الرقم الدولي إلى الصيغة المحلية
       if (phoneController.text.startsWith('+966')) {
         phoneController.text = '0${phoneController.text.substring(4)}';
       }
 
-      cityController.text = courierData['city']?.toString() ?? '';
+      // المدينة دائمًا Riyadh
+      cityController.text = 'Riyadh';
 
       status = courierData['statues']?.toString() ?? 'active';
 
@@ -111,9 +113,8 @@ class _EditCourierPageState extends State<EditCourierPage> {
   }
 
   // =========================
-  // التحقق من رقم الجوال أثناء الكتابة
+  // التحقق من رقم الجوال
   // =========================
-
   Future<void> checkPhoneExists(String value) async {
     final phone = value.trim();
     final requestId = ++phoneCheckRequestId;
@@ -182,20 +183,20 @@ class _EditCourierPageState extends State<EditCourierPage> {
   }
 
   // =========================
-  // Update Courier
+  // حفظ التعديلات
   // =========================
-
   Future<void> updateCourier() async {
     FocusScope.of(context).unfocus();
 
     final firstName = firstNameController.text.trim();
     final lastName = lastNameController.text.trim();
     final phone = phoneController.text.trim();
-    final city = cityController.text.trim();
+
+    // المدينة ثابتة دائمًا
+    const city = 'Riyadh';
 
     bool hasError = false;
 
-    // التحقق من جميع الحقول
     setState(() {
       firstNameError = null;
       lastNameError = null;
@@ -226,12 +227,6 @@ class _EditCourierPageState extends State<EditCourierPage> {
         hasError = true;
       } else if (!RegExp(r'^05[0-9]{8}$').hasMatch(phone)) {
         phoneError = 'رقم الجوال غير صحيح';
-        hasError = true;
-      }
-
-      // المدينة
-      if (city.isEmpty) {
-        cityError = 'الرجاء تعبئة الحقل';
         hasError = true;
       }
     });
@@ -297,7 +292,7 @@ class _EditCourierPageState extends State<EditCourierPage> {
 
       if (!mounted) return;
 
-      // تحديث البيانات
+      // تحديث بيانات المستخدم والمندوب
       final batch = _firestore.batch();
 
       final userRef = _firestore.collection('Users').doc(widget.userId);
@@ -338,9 +333,8 @@ class _EditCourierPageState extends State<EditCourierPage> {
   }
 
   // =========================
-  // Dispose
+  // تنظيف الحقول
   // =========================
-
   @override
   void dispose() {
     firstNameController.dispose();
@@ -352,9 +346,8 @@ class _EditCourierPageState extends State<EditCourierPage> {
   }
 
   // =========================
-  // Build
+  // تصميم الصفحة
   // =========================
-
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -434,19 +427,12 @@ class _EditCourierPageState extends State<EditCourierPage> {
 
                     AppGap.md,
 
-                    // المدينة
+                    // المدينة ثابتة على Riyadh
                     _buildField(
                       controller: cityController,
                       label: 'المدينة',
                       icon: Icons.location_on_outlined,
-                      errorText: cityError,
-                      onChanged: (value) {
-                        setState(() {
-                          cityError = value.trim().isEmpty
-                              ? 'الرجاء تعبئة الحقل'
-                              : null;
-                        });
-                      },
+                      readOnly: true,
                     ),
 
                     AppGap.md,
@@ -504,9 +490,8 @@ class _EditCourierPageState extends State<EditCourierPage> {
   }
 
   // =========================
-  // Text Field
+  // تصميم حقول الإدخال
   // =========================
-
   Widget _buildField({
     required TextEditingController controller,
     required String label,
@@ -516,9 +501,11 @@ class _EditCourierPageState extends State<EditCourierPage> {
     TextInputType? keyboardType,
     List<TextInputFormatter>? inputFormatters,
     int? maxLength,
+    bool readOnly = false,
   }) {
     return TextField(
       controller: controller,
+      readOnly: readOnly,
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,
       maxLength: maxLength,
