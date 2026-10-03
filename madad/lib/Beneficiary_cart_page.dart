@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'app_design.dart';
 import 'Beneficiary_view_donation_page.dart';
+import 'beneficiary_delivery_method_page.dart';
 
 class BeneficiaryCartPage extends StatefulWidget {
   final String userId;
@@ -23,7 +24,6 @@ class _BeneficiaryCartPageState
     extends State<BeneficiaryCartPage> {
 
   bool _isDeleting = false;
-  bool _isSubmittingOrder = false;
 
  Future<void> _deleteFromCart(String cartDocId) async {
   try {
@@ -46,104 +46,21 @@ class _BeneficiaryCartPageState
       'تعذر إزالة الصندوق من السلة',
     );
   }
-}Future<void> _submitOrder(
+
+}Future<void> _goToDeliveryMethod(
   List<Map<String, dynamic>> availableItems,
 ) async {
-  if (_isSubmittingOrder) return;
+  if (availableItems.isEmpty ) return;
 
-  try {
-    setState(() {
-      _isSubmittingOrder = true;
-    });
-
-    final firestore = FirebaseFirestore.instance;
-
-    // إنشاء رقم الطلب
-    final orderRef = firestore.collection('orders').doc();
-
-    // تجهيز الصناديق الموجودة في الطلب
-    final List<Map<String, dynamic>> orderItems =
-        availableItems.map((item) {
-      final box = item['box'] as Map<String, dynamic>;
-
-      return {
-        'boxId': item['boxId'],
-        'donationId': box['donationId'] ?? '',
-        'numberOfItems': box['items'] is List
-            ? (box['items'] as List).length
-            : 0,
-        'gender': box['gender'] ?? '',
-        'ageGroup': box['ageGroup']?['label'] ?? '',
-        'generalSize': box['generalSize'] ?? '',
-      };
-    }).toList();
-
-    // إنشاء Batch لتنفيذ كل عمليات الطلب معًا
-final batch = firestore.batch();
-
-// إنشاء الطلب
-batch.set(orderRef, {
-  'beneficiaryId': widget.userId,
-  'status': 'pending',
-  'items': orderItems,
-  'numberOfBoxes': orderItems.length,
-  'createdAt': FieldValue.serverTimestamp(),
-});
-
-// تحديث حالة الصناديق
-for (final item in availableItems) {
-  final boxId = item['boxId'].toString();
-
-  final boxRef = firestore
-      .collection('donation_boxes')
-      .doc(boxId);
-
-  batch.update(boxRef, {
-    'status': 'reserved',
-    'orderId': orderRef.id,
-    'reservedBy': widget.userId,
-    'reservedAt': FieldValue.serverTimestamp(),
-  });
-}
-
-// تحديث حالة عناصر السلة
-for (final item in availableItems) {
-  final cartDocId = item['cartDocId'].toString();
-
-  final cartRef = firestore
-      .collection('cart')
-      .doc(cartDocId);
-
-  batch.update(cartRef, {
-    'status': 'ordered',
-    'orderId': orderRef.id,
-    'orderedAt': FieldValue.serverTimestamp(),
-  });
-}
-
-// تنفيذ جميع العمليات
-await batch.commit();
-
-    if (!mounted) return;
-
-    AppDesign.showSuccessSnackBar(
-      context,
-      'تم إرسال طلب التبرع بنجاح',
-    );
-  } catch (e) {
-    if (!mounted) return;
-
-    AppDesign.showErrorSnackBar(
-      context,
-      'حدث خطأ أثناء إتمام الطلب',
-    );
-  } finally {
-    if (mounted) {
-      setState(() {
-        _isSubmittingOrder = false;
-      });
-    }
-  }
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => BeneficiaryDeliveryMethodPage(
+        userId: widget.userId,
+        cartItems: availableItems,
+      ),
+    ),
+  );
 }
   Future<Map<String, dynamic>?> _getBoxData(
     String boxId,
@@ -751,11 +668,10 @@ await batch.commit();
           height: AppDesign.buttonHeightMD,
           child: ElevatedButton(
            onPressed:
-    hasUnavailable || !hasAvailable || _isSubmittingOrder
+    hasUnavailable || !hasAvailable 
         ? null
         : () async {
-            await _submitOrder(availableItems);
-          },
+await _goToDeliveryMethod(availableItems);          },
             child: Text(
               hasUnavailable
                   ? 'أزل الصناديق غير المتاحة للمتابعة'
