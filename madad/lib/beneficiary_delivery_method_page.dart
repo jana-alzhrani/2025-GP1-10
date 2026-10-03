@@ -752,33 +752,163 @@ Widget _pickupSection() {
   }
 Future<void> _createRequest() async {
   try {
-    print('CREATE REQUEST STARTED');
-    final requestRef =
-        FirebaseFirestore.instance.collection('requests').doc();
+    final firestore = FirebaseFirestore.instance;
+    final requestRef = firestore.collection('requests').doc();
 
-    await requestRef.set({
-      'requestId': requestRef.id,
-      'beneficiaryId': widget.userId,
-      'courierId': null,
-      'status': 'pending',
-      'deliveryMethod': selectedMethod,
-      'createdAt': FieldValue.serverTimestamp(),
-      'deliveredAt': null,
-      'deliveryAddress': selectedMethod == 'delivery'
-          ? {
-              'city': selectedCity,
-              'district': selectedDistrict,
-              'shortNationalAddress':
-                  _shortAddressController.text.trim().toUpperCase(),
-            }
-          : {
-              'warehouseName': warehouseName,
-              'warehouseLat': warehouseLat,
-              'warehouseLng': warehouseLng,
-            },
+    if (widget.cartItems.isEmpty) {
+      if (!mounted) return;
+      AppDesign.showErrorSnackBar(
+        context,
+        'لا توجد صناديق لإتمام الطلب',
+      );
+      return;
+    }
+
+    await firestore.runTransaction((transaction) async {
+      final boxSnapshots =
+          <String, DocumentSnapshot<Map<String, dynamic>>>{};
+
+      final cartRefs =
+          <String, DocumentReference<Map<String, dynamic>>>{};
+
+      // 1. قراءة جميع الصناديق أولًا
+      for (final item in widget.cartItems) {
+        final boxId = item['boxId']?.toString();
+        final cartDocId = item['cartDocId']?.toString();
+
+        if (boxId == null ||
+            boxId.isEmpty ||
+            cartDocId == null ||
+            cartDocId.isEmpty) {
+          throw Exception('بيانات الصندوق غير مكتملة');
+        }
+
+        final boxRef =
+            firestore.collection('donation_boxes').doc(boxId);
+
+        final boxSnapshot = await transaction.get(boxRef);
+
+        boxSnapshots[boxId] = boxSnapshot;
+
+        cartRefs[cartDocId] =
+            firestore.collection('cart').doc(cartDocId);
+      }
+
+      // 2. التأكد أن جميع الصناديق ما زالت متاحة
+      for (final snapshot in boxSnapshots.values) {
+        if (!snapshot.exists) {
+          throw Exception('أحد الصناديق لم يعد موجودًا');
+        }
+
+        final data = snapshot.data();
+
+        if (data?['status'] != 'available') {
+          throw Exception(
+            'أحد الصناديق لم يعد متاحًا، يرجى العودة للسلة والمحاولة مرة أخرى',
+          );
+        }
+      }
+
+      // 3. قراءة مستندات السلة
+      final cartSnapshots =
+          <String, DocumentSnapshot<Map<String, dynamic>>>{};
+
+      for (final entry in cartRefs.entries) {
+        final snapshot = await transaction.get(entry.value);
+        cartSnapshots[entry.key] = snapshot;
+      }
+
+      // 4. التأكد أن عناصر السلة ما زالت صحيحة
+      for (final snapshot in cartSnapshots.values) {
+        if (!snapshot.exists) {
+          throw Exception('أحد عناصر السلة لم يعد موجودًا');
+        }
+
+        final data = snapshot.data();
+
+        if (data?['status'] != 'in_cart') {
+          throw Exception(
+            'أحد الصناديق لم يعد موجودًا في السلة',
+          );
+        }
+
+        if (data?['beneficiaryId'] != widget.userId) {
+          throw Exception('هذا الصندوق لا ينتمي إلى حسابك');
+        }
+      }
+
+      // 5. إنشاء الطلب
+      transaction.set(requestRef, {
+        'requestId': requestRef.id,
+        'beneficiaryId': widget.userId,
+        'courierId': null,
+        'status': 'requested',
+        'deliveryMethod': selectedMethod,
+        'createdAt': FieldValue.serverTimestamp(),
+        'deliveredAt': null,
+        'deliveryAddress': selectedMethod == 'delivery'
+            ? {
+                'city': selectedCity,
+                'district': selectedDistrict,
+                'shortNationalAddress':
+                    _shortAddressController.text.trim().toUpperCase(),
+              }
+            : {
+                'warehouseName': warehouseName,
+                'warehouseLat': warehouseLat,
+                'warehouseLng': warehouseLng,
+              },
+      });
+
+      // 6. حجز الصناديق
+      for (final item in widget.cartItems) {
+        final boxId = item['boxId'].toString();
+        final cartDocId = item['cartDocId'].toString();
+
+        final boxRef =
+            firestore.collection('donation_boxes').doc(boxId);
+
+        final cartRef =
+            firestore.collection('cart').doc(cartDocId);
+
+        transaction.update(boxRef, {
+          'status': 'reserved',
+          'requestId': requestRef.id,
+        });
+
+        // إخراج الصندوق من السلة
+        transaction.update(cartRef, {
+          'status': 'requested',
+        });
+      }
     });
+
+    print('REQUEST CREATED: ${requestRef.id}');
+
+    if (!mounted) return;
+
+    AppDesign.showSuccessSnackBar(
+      context,
+      'تم إرسال طلب التبرع بنجاح',
+    );
+
+    // الرجوع للسلة، وستختفي الصناديق لأن حالتها أصبحت requested
+    Navigator.pop(context, true);
   } catch (e) {
     print('Error creating request: $e');
+
+    if (!mounted) return;
+
+    String message = e.toString();
+
+    if (message.startsWith('Exception: ')) {
+      message = message.substring('Exception: '.length);
+    }
+
+    AppDesign.showErrorSnackBar(
+      context,
+      message,
+    );
   }
 }
   @override
@@ -876,8 +1006,10 @@ Future<void> _createRequest() async {
                         );
 
                         if (!confirmed) return;
+                        print('BEFORE CREATE REQUEST');
 
                          await _createRequest();
+                         print('AFTER CREATE REQUEST');
                         },
                   child: const Text('تأكيد طلب التبرع'),
                 ),
