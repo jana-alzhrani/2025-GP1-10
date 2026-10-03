@@ -408,7 +408,7 @@ class _BeneficiaryCartPageState
                       BorderRadius.circular(14),
                 ),
                 child: Text(
-                  'هذا الصندوق وجد طريقه إلى مستفيد آخر، ويمكنك إزالته للمتابعة.',
+                  'هذا الصندوق وجد طريقه إلى مستفيد آخر. يرجى إزالته من السلة للمتابعة',
                   textAlign: TextAlign.center,
                   style:
                       AppDesign.bodyStyle.copyWith(
