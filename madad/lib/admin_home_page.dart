@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import 'app_design.dart';
 
@@ -16,8 +17,6 @@ class AdminHomePage extends StatefulWidget {
 }
 
 class _AdminHomePageState extends State<AdminHomePage> {
-  int _bottomNavIndex = 0;
-
   String adminName = 'المشرف';
   bool isLoading = true;
 
@@ -31,20 +30,38 @@ class _AdminHomePageState extends State<AdminHomePage> {
     _loadAdminData();
   }
 
+  // =========================================================
+  // Load Admin + Beneficiaries + Couriers
+  // =========================================================
+
   Future<void> _loadAdminData() async {
     try {
-      // بيانات الأدمن
+      // -----------------------------------------
+      // 1) بيانات الأدمن من Users
+      // -----------------------------------------
       final adminDoc = await FirebaseFirestore.instance
           .collection('Users')
           .doc(widget.userId)
           .get();
 
-      // جميع المستخدمين
-      final usersSnapshot =
-          await FirebaseFirestore.instance.collection('Users').get();
+      // -----------------------------------------
+      // 2) بيانات المستفيدين من beneficiaries
+      // -----------------------------------------
+      final beneficiariesSnapshot = await FirebaseFirestore.instance
+          .collection('beneficiaries')
+          .get();
+
+      // -----------------------------------------
+      // 3) بيانات المناديب من couriers
+      // -----------------------------------------
+      final couriersSnapshot =
+          await FirebaseFirestore.instance.collection('couriers').get();
 
       if (!mounted) return;
 
+      // -----------------------------------------
+      // اسم الأدمن
+      // -----------------------------------------
       String fetchedAdminName = 'المشرف';
 
       if (adminDoc.exists) {
@@ -63,31 +80,29 @@ class _AdminHomePageState extends State<AdminHomePage> {
         }
       }
 
+      // -----------------------------------------
+      // حساب المستفيدين
+      // -----------------------------------------
       int pending = 0;
       int approved = 0;
-      int couriers = 0;
 
-      for (final doc in usersSnapshot.docs) {
+      for (final doc in beneficiariesSnapshot.docs) {
         final data = doc.data();
-
-        final role =
-            (data['role'] ?? '').toString().trim().toLowerCase();
 
         final status =
             (data['status'] ?? '').toString().trim().toLowerCase();
 
-        if (role == 'beneficiary' || role == 'مستفيد') {
-          if (status == 'pending') {
-            pending++;
-          } else if (status == 'approved') {
-            approved++;
-          }
-        }
-
-        if (role == 'courier' || role == 'مندوب') {
-          couriers++;
+        if (status == 'pending') {
+          pending++;
+        } else if (status == 'approved') {
+          approved++;
         }
       }
+
+      // -----------------------------------------
+      // عدد المناديب
+      // -----------------------------------------
+      final int couriers = couriersSnapshot.docs.length;
 
       setState(() {
         adminName = fetchedAdminName;
@@ -107,13 +122,46 @@ class _AdminHomePageState extends State<AdminHomePage> {
     }
   }
 
+Future<void> _logout() async {
+  final confirmed = await AppDesign.showAppDialog(
+    context: context,
+    title: 'تسجيل الخروج',
+    message: 'هل أنت متأكد من تسجيل الخروج؟',
+    cancelText: 'إلغاء',
+    confirmText: 'تسجيل الخروج',
+  );
+
+  if (!confirmed) return;
+
+  try {
+    await FirebaseAuth.instance.signOut();
+
+    if (!mounted) return;
+
+    Navigator.pushNamedAndRemoveUntil(
+      context,
+      '/welcome',
+      (route) => false,
+    );
+  } catch (e) {
+    if (!mounted) return;
+
+    AppDesign.showErrorSnackBar(
+      context,
+      'تعذر تسجيل الخروج، حاول مرة أخرى',
+    );
+  }
+}
+  // =========================================================
+  // Build
+  // =========================================================
+
   @override
   Widget build(BuildContext context) {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: AppDesign.background,
-
         body: SafeArea(
           child: RefreshIndicator(
             color: AppDesign.primary,
@@ -122,7 +170,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
               physics: const AlwaysScrollableScrollPhysics(),
               padding: AppPadding.screen.copyWith(
                 top: 22,
-                bottom: 24,
+                bottom: 30,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -154,41 +202,47 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
                   const SizedBox(height: 24),
 
-                  // =========================
+                  // =================================================
                   // المستفيدون
-                  // =========================
+                  // =================================================
+
                   _buildManagementCard(
                     title: 'المستفيدون',
-                    subtitle:
-                        'مراجعة طلبات التسجيل وإدارة المستفيدين',
+                    subtitle: 'مراجعة طلبات التسجيل وإدارة المستفيدين',
                     icon: Icons.family_restroom_rounded,
                     badgeCount: pendingBeneficiariesCount,
                     badgeText: 'طلبات جديدة',
-                    onTap: () {
-                      Navigator.pushNamed(
+                    onTap: () async {
+                      await Navigator.pushNamed(
                         context,
                         '/adminBeneficiaries',
                         arguments: widget.userId,
                       );
+
+                      // تحديث الأعداد بعد الرجوع
+                      _loadAdminData();
                     },
                   ),
 
                   const SizedBox(height: 18),
 
-                  // =========================
+                  // =================================================
                   // المناديب
-                  // =========================
+                  // =================================================
+
                   _buildManagementCard(
                     title: 'المناديب',
-                    subtitle:
-                        'عرض وإدارة حسابات مناديب التوصيل',
+                    subtitle: 'عرض وإدارة حسابات مناديب التوصيل',
                     icon: Icons.local_shipping_outlined,
-                    onTap: () {
-                      Navigator.pushNamed(
+                    onTap: () async {
+                      await Navigator.pushNamed(
                         context,
                         '/adminCouriers',
                         arguments: widget.userId,
                       );
+
+                      // تحديث العدد بعد الرجوع
+                      _loadAdminData();
                     },
                   ),
 
@@ -201,7 +255,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
           ),
         ),
 
-        bottomNavigationBar: _buildBottomNavigationBar(),
+        // لا يوجد Bottom Navigation
+        // الأدمن لديه الرئيسية فقط
       ),
     );
   }
@@ -210,57 +265,86 @@ class _AdminHomePageState extends State<AdminHomePage> {
   // Header
   // =========================================================
 
-  Widget _buildHeader() {
-    final String firstLetter =
-        adminName.trim().isNotEmpty ? adminName.trim()[0] : 'م';
+ Widget _buildHeader() {
+  final String firstLetter =
+      adminName.trim().isNotEmpty ? adminName.trim()[0] : 'م';
 
-    return Row(
-      children: [
-        CircleAvatar(
-          radius: 24,
-          backgroundColor: AppDesign.primary,
-          child: Text(
-            firstLetter,
-            style: const TextStyle(
+  return Row(
+    children: [
+      CircleAvatar(
+        radius: 24,
+        backgroundColor: AppDesign.primary,
+        child: Text(
+          firstLetter,
+          style: const TextStyle(
+            color: AppDesign.white,
+            fontWeight: FontWeight.w800,
+            fontSize: 20,
+          ),
+        ),
+      ),
+
+      AppGap.wMD,
+
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'مرحبًا',
+              style: AppDesign.bodyStyle.copyWith(
+                color: AppDesign.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+
+            const SizedBox(height: 2),
+
+            Text(
+              adminName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppDesign.h1Style.copyWith(
+                color: AppDesign.primary,
+                fontSize: 29,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
+
+      const SizedBox(width: 12),
+
+      // تسجيل الخروج
+      Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _logout,
+          borderRadius: BorderRadius.circular(AppDesign.radiusMD),
+          child: Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
               color: AppDesign.white,
-              fontWeight: FontWeight.w800,
-              fontSize: 20,
+              borderRadius: BorderRadius.circular(
+                AppDesign.radiusMD,
+              ),
+              border: Border.all(
+                color: AppDesign.border,
+              ),
+            ),
+            child: const Icon(
+              Icons.logout_rounded,
+              color: AppDesign.primary,
+              size: 24,
             ),
           ),
         ),
-
-        AppGap.wMD,
-
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'مرحبًا',
-                style: AppDesign.bodyStyle.copyWith(
-                  color: AppDesign.primary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-
-              const SizedBox(height: 2),
-
-              Text(
-                adminName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppDesign.h1Style.copyWith(
-                  color: AppDesign.primary,
-                  fontSize: 29,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
+      ),
+    ],
+  );
+}
 
   // =========================================================
   // Management Card
@@ -284,8 +368,9 @@ class _AdminHomePageState extends State<AdminHomePage> {
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: AppDesign.white,
-            borderRadius:
-                BorderRadius.circular(AppDesign.radiusXL),
+            borderRadius: BorderRadius.circular(
+              AppDesign.radiusXL,
+            ),
             border: Border.all(
               color: AppDesign.border,
             ),
@@ -299,13 +384,11 @@ class _AdminHomePageState extends State<AdminHomePage> {
           ),
           child: Row(
             children: [
-              // Icon
               Container(
                 width: 58,
                 height: 58,
                 decoration: BoxDecoration(
-                  color:
-                      AppDesign.secondary.withOpacity(0.14),
+                  color: AppDesign.secondary.withOpacity(0.14),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
@@ -317,16 +400,13 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
               const SizedBox(width: 16),
 
-              // Text
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       title,
-                      style:
-                          AppDesign.h1Style.copyWith(
+                      style: AppDesign.h1Style.copyWith(
                         color: AppDesign.primary,
                         fontSize: 22,
                         fontWeight: FontWeight.w800,
@@ -337,39 +417,32 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
                     Text(
                       subtitle,
-                      style:
-                          AppDesign.bodyStyle.copyWith(
-                        color:
-                            AppDesign.textSecondary,
+                      style: AppDesign.bodyStyle.copyWith(
+                        color: AppDesign.textSecondary,
                         fontSize: 13.5,
                         height: 1.5,
                       ),
                     ),
 
-                    if (badgeCount != null &&
-                        badgeCount > 0) ...[
+                    if (badgeCount != null && badgeCount > 0) ...[
                       const SizedBox(height: 12),
 
                       Container(
-                        padding:
-                            const EdgeInsets.symmetric(
+                        padding: const EdgeInsets.symmetric(
                           horizontal: 12,
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: AppDesign.softGreen
-                              .withOpacity(0.17),
-                          borderRadius:
-                              BorderRadius.circular(20),
+                          color:
+                              AppDesign.softGreen.withOpacity(0.17),
+                          borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
                           '$badgeCount ${badgeText ?? ''}',
-                          style:
-                              AppDesign.bodyStyle.copyWith(
+                          style: AppDesign.bodyStyle.copyWith(
                             color: AppDesign.primary,
                             fontSize: 12.5,
-                            fontWeight:
-                                FontWeight.w700,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
@@ -382,8 +455,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
               Icon(
                 Icons.arrow_back_ios_new_rounded,
-                color:
-                    AppDesign.primary.withOpacity(0.55),
+                color: AppDesign.primary.withOpacity(0.55),
                 size: 19,
               ),
             ],
@@ -394,7 +466,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
   }
 
   // =========================================================
-  // Quick summary
+  // Quick Summary
   // =========================================================
 
   Widget _buildQuickSummary() {
@@ -446,6 +518,10 @@ class _AdminHomePageState extends State<AdminHomePage> {
     );
   }
 
+  // =========================================================
+  // Summary Card
+  // =========================================================
+
   Widget _buildSummaryCard({
     required String title,
     required int value,
@@ -454,15 +530,15 @@ class _AdminHomePageState extends State<AdminHomePage> {
   }) {
     return Container(
       width: fullWidth ? double.infinity : null,
-      padding:
-          const EdgeInsets.symmetric(
+      padding: const EdgeInsets.symmetric(
         horizontal: 15,
         vertical: 17,
       ),
       decoration: BoxDecoration(
         color: AppDesign.white,
-        borderRadius:
-            BorderRadius.circular(AppDesign.radiusXL),
+        borderRadius: BorderRadius.circular(
+          AppDesign.radiusXL,
+        ),
         border: Border.all(
           color: AppDesign.border,
         ),
@@ -473,8 +549,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color:
-                  AppDesign.secondary.withOpacity(0.14),
+              color: AppDesign.secondary.withOpacity(0.14),
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -488,15 +563,12 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
-                  style:
-                      AppDesign.bodyStyle.copyWith(
-                    color:
-                        AppDesign.textSecondary,
+                  style: AppDesign.bodyStyle.copyWith(
+                    color: AppDesign.textSecondary,
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                   ),
@@ -504,92 +576,25 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
                 const SizedBox(height: 5),
 
-                Text(
-                  '$value',
-                  style:
-                      AppDesign.h1Style.copyWith(
-                    color: AppDesign.primary,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
+                isLoading
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppDesign.primary,
+                        ),
+                      )
+                    : Text(
+                        '$value',
+                        style: AppDesign.h1Style.copyWith(
+                          color: AppDesign.primary,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // =========================================================
-  // Bottom Navigation
-  // =========================================================
-
-  Widget _buildBottomNavigationBar() {
-    return Container(
-      margin:
-          const EdgeInsets.fromLTRB(16, 0, 16, 14),
-      decoration: BoxDecoration(
-        color: AppDesign.white,
-        borderRadius:
-            BorderRadius.circular(AppDesign.radiusXL),
-        boxShadow: [
-          BoxShadow(
-            color: AppDesign.black.withOpacity(0.06),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: NavigationBar(
-        height: 78,
-        selectedIndex: _bottomNavIndex,
-        backgroundColor: Colors.transparent,
-        indicatorColor:
-            AppDesign.secondary.withOpacity(0.16),
-        surfaceTintColor: Colors.transparent,
-        labelBehavior:
-            NavigationDestinationLabelBehavior.alwaysShow,
-
-        onDestinationSelected: (index) {
-          if (index == _bottomNavIndex) return;
-
-          setState(() {
-            _bottomNavIndex = index;
-          });
-
-          if (index == 1) {
-            Navigator.pushReplacementNamed(
-              context,
-              '/adminMore',
-              arguments: widget.userId,
-            );
-          }
-        },
-
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(
-              Icons.home_outlined,
-              color: AppDesign.primary,
-            ),
-            selectedIcon: Icon(
-              Icons.home_rounded,
-              color: AppDesign.primary,
-            ),
-            label: 'الرئيسية',
-          ),
-
-          NavigationDestination(
-            icon: Icon(
-              Icons.more_horiz_rounded,
-              color: AppDesign.primary,
-            ),
-            selectedIcon: Icon(
-              Icons.more_horiz_rounded,
-              color: AppDesign.primary,
-            ),
-            label: 'المزيد',
           ),
         ],
       ),
