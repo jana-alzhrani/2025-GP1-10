@@ -19,25 +19,81 @@ class AdminBeneficiariesPage extends StatefulWidget {
 
 class _AdminBeneficiariesPageState
     extends State<AdminBeneficiariesPage> {
-  int selectedTab = 0;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  final FirebaseFirestore _firestore =
-      FirebaseFirestore.instance;
+  int selectedTab = 0;
 
   // =========================================================
   // Firestore
   // =========================================================
 
   Stream<QuerySnapshot<Map<String, dynamic>>> _beneficiariesStream() {
-    return _firestore
-        .collection('Users')
-        .where('role', isEqualTo: 'beneficiary')
-        .snapshots();
+    return _firestore.collection('beneficiaries').snapshots();
   }
 
-  String _getName(Map<String, dynamic> data) {
+  String _getStatus(Map<String, dynamic> data) {
+    return (data['status'] ?? 'pending')
+        .toString()
+        .trim()
+        .toLowerCase();
+  }
+
+  String _getSocialSecurityNumber(Map<String, dynamic> data) {
+    return (data['socialSecurityNumber'] ?? 'غير متوفر').toString();
+  }
+
+  String _getPdfUrl(Map<String, dynamic> data) {
+    return (data['socialSecurityPdfUrl'] ?? '').toString();
+  }
+
+  String _getUserId(
+    String beneficiaryDocumentId,
+    Map<String, dynamic> data,
+  ) {
+    final value = data['userId'];
+
+    if (value is DocumentReference) {
+      return value.id;
+    }
+
+    final userId = (value ?? '').toString().trim();
+
+    if (userId.isNotEmpty) {
+      return userId;
+    }
+
+    // لأننا نعتمد أن beneficiary document ID = uid
+    return beneficiaryDocumentId;
+  }
+
+  // =========================================================
+  // User Data
+  // =========================================================
+
+  Future<Map<String, dynamic>?> _getUserData(String userId) async {
+    if (userId.trim().isEmpty) return null;
+
+    try {
+      final document =
+          await _firestore.collection('Users').doc(userId).get();
+
+      if (!document.exists) return null;
+
+      return document.data();
+    } catch (e) {
+      debugPrint('Get beneficiary user error: $e');
+      return null;
+    }
+  }
+
+  String _getName(Map<String, dynamic>? data) {
+    if (data == null) {
+      return 'مستفيد';
+    }
+
     final firstName =
         (data['firstName'] ?? '').toString().trim();
+
     final lastName =
         (data['lastName'] ?? '').toString().trim();
 
@@ -50,90 +106,370 @@ class _AdminBeneficiariesPageState
     return (data['fullName'] ?? 'مستفيد').toString();
   }
 
-  String _getPhone(Map<String, dynamic> data) {
-    return (data['phoneNumber'] ??
-            data['phone'] ??
-            'غير متوفر')
-        .toString();
+  String _getPhone(Map<String, dynamic>? data) {
+    if (data == null) {
+      return 'غير متوفر';
+    }
+
+    final phone = (data['phone'] ?? '').toString().trim();
+
+    if (phone.isNotEmpty) {
+      return phone;
+    }
+
+    final phoneNumber =
+        (data['phoneNumber'] ?? '').toString().trim();
+
+    if (phoneNumber.isNotEmpty) {
+      return phoneNumber;
+    }
+
+    return 'غير متوفر';
   }
 
-  String _getSocialSecurityNumber(
-      Map<String, dynamic> data) {
-    return (data['socialSecurityNumber'] ??
-            data['socialSecurity'] ??
-            'غير متوفر')
-        .toString();
-  }
+void _addBeneficiaryNotificationToBatch({
+  required WriteBatch batch,
+  required String beneficiaryUserId,
+  required bool isApproved,
+  String? rejectionReason,
+}) {
+  final notificationRef =
+      _firestore.collection('notifications').doc();
 
-  String _getPdfUrl(Map<String, dynamic> data) {
-    return (data['socialSecurityPdfUrl'] ??
-            data['socialSecurityFile'] ??
-            '')
-        .toString();
-  }
-
-  String _getStatus(Map<String, dynamic> data) {
-    return (data['status'] ?? 'pending')
-        .toString()
-        .trim()
-        .toLowerCase();
-  }
+  batch.set(notificationRef, {
+    'userId': beneficiaryUserId,
+    'type': isApproved
+        ? 'beneficiary_approved'
+        : 'beneficiary_rejected',
+    'title': isApproved
+        ? 'تم قبول طلبك'
+        : 'تم رفض طلبك',
+    'message': isApproved
+        ? 'تم قبول طلب تسجيلك كمستفيد في مدد. يمكنك الآن إضافة الكسوات إلى السلة وإرسال طلبك.'
+        : 'تعذر قبول طلب تسجيلك كمستفيد في مدد.',
+    if (!isApproved)
+      'rejectionReason': rejectionReason?.trim() ?? '',
+    'isRead': false,
+    'createdAt': FieldValue.serverTimestamp(),
+  });
+}
 
   // =========================================================
-  // Approve
+  // Approve Beneficiary
   // =========================================================
 
-  Future<void> _approveBeneficiary(
-    String documentId,
-    String name,
-  ) async {
+  Future<void> _approveBeneficiary({
+    required String beneficiaryId,
+    required String beneficiaryUserId,
+    required String name,
+  }) async {
     final confirmed = await _showConfirmDialog(
       title: 'قبول الطلب',
-      message:
-          'هل أنت متأكد من قبول طلب $name؟',
+      message: 'هل أنت متأكد من قبول طلب $name؟',
       confirmText: 'قبول',
     );
 
     if (!confirmed) return;
 
     try {
-      await _firestore
-          .collection('Users')
-          .doc(documentId)
-          .update({
-        'status': 'approved',
-        'isVerified': true,
-        'approvedAt': FieldValue.serverTimestamp(),
-        'approvedBy': widget.userId,
-      });
+      final beneficiaryRef =
+          _firestore.collection('beneficiaries').doc(beneficiaryId);
 
-      if (!mounted) return;
 
-      _showSuccessSnackBar(
-        'تم قبول المستفيد بنجاح',
+
+      final batch = _firestore.batch();
+
+      // تحديث حالة المستفيد
+      batch.update(
+        beneficiaryRef,
+        {
+          'status': 'approved',
+          'approvedAt': FieldValue.serverTimestamp(),
+          'approvedBy': widget.userId,
+
+          // إزالة أي بيانات رفض سابقة
+          'rejectionReason': FieldValue.delete(),
+          'rejectedAt': FieldValue.delete(),
+          'rejectedBy': FieldValue.delete(),
+
+          // إزالة بيانات حذف سابقة إن وجدت
+          'deletedAt': FieldValue.delete(),
+          'deletedBy': FieldValue.delete(),
+        },
       );
 
-      Navigator.pop(context);
-    } catch (e) {
+_addBeneficiaryNotificationToBatch(
+  batch: batch,
+  beneficiaryUserId: beneficiaryUserId,
+  isApproved: true,
+);
+
+      await batch.commit();
+
       if (!mounted) return;
 
-      _showErrorSnackBar(
+      Navigator.of(context).pop();
+
+      AppDesign.showSuccessSnackBar(
+        context,
+        'تم قبول المستفيد بنجاح',
+      );
+    } catch (e) {
+      debugPrint('Approve Beneficiary Error: $e');
+
+      if (!mounted) return;
+
+      AppDesign.showErrorSnackBar(
+        context,
         'حدث خطأ أثناء قبول الطلب',
       );
     }
   }
 
   // =========================================================
-  // Reject
+  // Reject Beneficiary
   // =========================================================
 
-  Future<void> _showRejectDialog(
-    String documentId,
-    String name,
-  ) async {
+  Future<void> _showRejectDialog({
+    required String beneficiaryId,
+    required String beneficiaryUserId,
+    required String name,
+  }) async {
     final controller = TextEditingController();
 
     final reason = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        String? errorText;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Directionality(
+              textDirection: TextDirection.rtl,
+              child: AlertDialog(
+                backgroundColor: AppDesign.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                title: Text(
+                  'رفض الطلب',
+                  textAlign: TextAlign.center,
+                  style: AppDesign.h1Style.copyWith(
+                    color: AppDesign.primary,
+                    fontSize: 21,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'يرجى كتابة سبب رفض طلب $name',
+                      textAlign: TextAlign.center,
+                      style: AppDesign.bodyStyle.copyWith(
+                        color: AppDesign.textSecondary,
+                      ),
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    TextField(
+                      controller: controller,
+                      maxLines: 4,
+                      textDirection: TextDirection.rtl,
+                      decoration: InputDecoration(
+                        hintText: 'سبب الرفض',
+                        errorText: errorText,
+                        filled: true,
+                        fillColor: AppDesign.background,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(
+                            color: AppDesign.border,
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(
+                            color: AppDesign.border,
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(
+                            color: AppDesign.primary,
+                            width: 1.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                actionsAlignment: MainAxisAlignment.center,
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(dialogContext);
+                    },
+                    child: Text(
+                      'إلغاء',
+                      style: AppDesign.bodyStyle.copyWith(
+                        color: AppDesign.textSecondary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+
+                  ElevatedButton(
+                    onPressed: () {
+                      final value = controller.text.trim();
+
+                      if (value.isEmpty) {
+                        setDialogState(() {
+                          errorText = 'سبب الرفض مطلوب';
+                        });
+                        return;
+                      }
+
+                      Navigator.pop(dialogContext, value);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red.shade700,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: const Text('رفض الطلب'),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    controller.dispose();
+
+    if (reason == null || reason.trim().isEmpty) {
+      return;
+    }
+
+    try {
+      final beneficiaryRef =
+          _firestore.collection('beneficiaries').doc(beneficiaryId);
+
+
+
+      final batch = _firestore.batch();
+
+      // تحديث حالة المستفيد
+      batch.update(
+        beneficiaryRef,
+        {
+          'status': 'rejected',
+          'rejectionReason': reason.trim(),
+          'rejectedAt': FieldValue.serverTimestamp(),
+          'rejectedBy': widget.userId,
+
+          // لو كان هناك قبول سابق
+          'approvedAt': FieldValue.delete(),
+          'approvedBy': FieldValue.delete(),
+        },
+      );
+
+_addBeneficiaryNotificationToBatch(
+  batch: batch,
+  beneficiaryUserId: beneficiaryUserId,
+  isApproved: false,
+  rejectionReason: reason,
+);
+      await batch.commit();
+
+      if (!mounted) return;
+
+      // إغلاق Bottom Sheet
+      Navigator.of(context).pop();
+
+      AppDesign.showSuccessSnackBar(
+        context,
+        'تم رفض الطلب',
+      );
+    } catch (e) {
+      debugPrint('Reject Beneficiary Error: $e');
+
+      if (!mounted) return;
+
+      AppDesign.showErrorSnackBar(
+        context,
+        'حدث خطأ أثناء رفض الطلب',
+      );
+    }
+  }
+
+  // =========================================================
+  // Delete Approved Beneficiary
+  // =========================================================
+
+  Future<void> _deleteBeneficiary({
+    required String beneficiaryId,
+    required String beneficiaryUserId,
+    required String name,
+  }) async {
+    final confirmed = await _showConfirmDialog(
+      title: 'حذف المستفيد',
+      message: 'هل أنت متأكد من حذف $name من قائمة المستفيدين؟',
+      confirmText: 'حذف',
+      destructive: true,
+    );
+
+    if (!confirmed) return;
+
+    try {
+      final beneficiaryRef =
+          _firestore.collection('beneficiaries').doc(beneficiaryId);
+
+      // Soft Delete
+      await beneficiaryRef.update({
+        'status': 'deleted',
+        'deletedAt': FieldValue.serverTimestamp(),
+        'deletedBy': widget.userId,
+      });
+
+      if (!mounted) return;
+
+      Navigator.of(context).pop();
+
+      AppDesign.showSuccessSnackBar(
+        context,
+        'تم حذف المستفيد من القائمة',
+      );
+    } catch (e) {
+      debugPrint('Delete Beneficiary Error: $e');
+
+      if (!mounted) return;
+
+      AppDesign.showErrorSnackBar(
+        context,
+        'حدث خطأ أثناء حذف المستفيد',
+      );
+    }
+  }
+
+  // =========================================================
+  // Confirm Dialog
+  // =========================================================
+
+  Future<bool> _showConfirmDialog({
+    required String title,
+    required String message,
+    required String confirmText,
+    bool destructive = false,
+  }) async {
+    final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) {
@@ -145,7 +481,7 @@ class _AdminBeneficiariesPageState
               borderRadius: BorderRadius.circular(24),
             ),
             title: Text(
-              'رفض الطلب',
+              title,
               textAlign: TextAlign.center,
               style: AppDesign.h1Style.copyWith(
                 color: AppDesign.primary,
@@ -153,58 +489,19 @@ class _AdminBeneficiariesPageState
                 fontWeight: FontWeight.w800,
               ),
             ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'يرجى كتابة سبب رفض طلب $name',
-                  textAlign: TextAlign.center,
-                  style: AppDesign.bodyStyle.copyWith(
-                    color: AppDesign.textSecondary,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                TextField(
-                  controller: controller,
-                  maxLines: 4,
-                  textDirection: TextDirection.rtl,
-                  decoration: InputDecoration(
-                    hintText: 'سبب الرفض',
-                    filled: true,
-                    fillColor: AppDesign.background,
-                    border: OutlineInputBorder(
-                      borderRadius:
-                          BorderRadius.circular(18),
-                      borderSide: BorderSide(
-                        color: AppDesign.border,
-                      ),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius:
-                          BorderRadius.circular(18),
-                      borderSide: BorderSide(
-                        color: AppDesign.border,
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius:
-                          BorderRadius.circular(18),
-                      borderSide: const BorderSide(
-                        color: AppDesign.primary,
-                        width: 1.5,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+            content: Text(
+              message,
+              textAlign: TextAlign.center,
+              style: AppDesign.bodyStyle.copyWith(
+                color: AppDesign.textSecondary,
+                height: 1.6,
+              ),
             ),
-            actionsAlignment:
-                MainAxisAlignment.center,
+            actionsAlignment: MainAxisAlignment.center,
             actions: [
               TextButton(
                 onPressed: () {
-                  Navigator.pop(dialogContext);
+                  Navigator.pop(dialogContext, false);
                 },
                 child: Text(
                   'إلغاء',
@@ -214,36 +511,21 @@ class _AdminBeneficiariesPageState
                   ),
                 ),
               ),
-              TextButton(
+              ElevatedButton(
                 onPressed: () {
-                  final value =
-                      controller.text.trim();
-
-                  if (value.isEmpty) {
-                    ScaffoldMessenger.of(context)
-                        .showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'يرجى كتابة سبب الرفض',
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    );
-                    return;
-                  }
-
-                  Navigator.pop(
-                    dialogContext,
-                    value,
-                  );
+                  Navigator.pop(dialogContext, true);
                 },
-                child: Text(
-                  'رفض الطلب',
-                  style: AppDesign.bodyStyle.copyWith(
-                    color: Colors.red.shade700,
-                    fontWeight: FontWeight.w800,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: destructive
+                      ? Colors.red.shade700
+                      : AppDesign.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
                   ),
                 ),
+                child: Text(confirmText),
               ),
             ],
           ),
@@ -251,82 +533,7 @@ class _AdminBeneficiariesPageState
       },
     );
 
-    controller.dispose();
-
-    if (reason == null || reason.isEmpty) return;
-
-    try {
-      await _firestore
-          .collection('Users')
-          .doc(documentId)
-          .update({
-        'status': 'rejected',
-        'isVerified': false,
-        'rejectionReason': reason,
-        'rejectedAt': FieldValue.serverTimestamp(),
-        'reviewedBy': widget.userId,
-      });
-
-      if (!mounted) return;
-
-      _showSuccessSnackBar(
-        'تم رفض الطلب',
-      );
-
-      Navigator.pop(context);
-    } catch (e) {
-      if (!mounted) return;
-
-      _showErrorSnackBar(
-        'حدث خطأ أثناء رفض الطلب',
-      );
-    }
-  }
-
-  // =========================================================
-  // Delete approved beneficiary
-  // =========================================================
-
-  Future<void> _deleteBeneficiary(
-    String documentId,
-    String name,
-  ) async {
-    final confirmed = await _showConfirmDialog(
-      title: 'حذف المستفيد',
-      message:
-          'هل أنت متأكد من حذف $name من قائمة المستفيدين؟',
-      confirmText: 'حذف',
-      destructive: true,
-    );
-
-    if (!confirmed) return;
-
-    try {
-      // مبدئيًا Soft Delete أفضل من حذف المستند نهائيًا.
-      await _firestore
-          .collection('Users')
-          .doc(documentId)
-          .update({
-        'status': 'deleted',
-        'isVerified': false,
-        'deletedAt': FieldValue.serverTimestamp(),
-        'deletedBy': widget.userId,
-      });
-
-      if (!mounted) return;
-
-      _showSuccessSnackBar(
-        'تم حذف المستفيد من القائمة',
-      );
-
-      Navigator.pop(context);
-    } catch (e) {
-      if (!mounted) return;
-
-      _showErrorSnackBar(
-        'حدث خطأ أثناء حذف المستفيد',
-      );
-    }
+    return result ?? false;
   }
 
   // =========================================================
@@ -335,7 +542,8 @@ class _AdminBeneficiariesPageState
 
   Future<void> _openPdf(String url) async {
     if (url.trim().isEmpty) {
-      _showErrorSnackBar(
+      AppDesign.showErrorSnackBar(
+        context,
         'ملف إثبات الضمان غير متوفر',
       );
       return;
@@ -350,14 +558,18 @@ class _AdminBeneficiariesPageState
       );
 
       if (!opened && mounted) {
-        _showErrorSnackBar(
+        AppDesign.showErrorSnackBar(
+          context,
           'تعذر فتح الملف',
         );
       }
     } catch (e) {
+      debugPrint('Open PDF Error: $e');
+
       if (!mounted) return;
 
-      _showErrorSnackBar(
+      AppDesign.showErrorSnackBar(
+        context,
         'تعذر فتح الملف',
       );
     }
@@ -381,8 +593,7 @@ class _AdminBeneficiariesPageState
               const SizedBox(height: 18),
 
               Padding(
-                padding:
-                    const EdgeInsets.symmetric(
+                padding: const EdgeInsets.symmetric(
                   horizontal: 20,
                 ),
                 child: _buildTabs(),
@@ -392,15 +603,13 @@ class _AdminBeneficiariesPageState
 
               Expanded(
                 child: StreamBuilder<
-                    QuerySnapshot<
-                        Map<String, dynamic>>>(
+                    QuerySnapshot<Map<String, dynamic>>>(
                   stream: _beneficiariesStream(),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState ==
                         ConnectionState.waiting) {
                       return const Center(
-                        child:
-                            CircularProgressIndicator(
+                        child: CircularProgressIndicator(
                           color: AppDesign.primary,
                         ),
                       );
@@ -410,13 +619,10 @@ class _AdminBeneficiariesPageState
                       return _buildErrorState();
                     }
 
-                    final allDocs =
-                        snapshot.data?.docs ?? [];
+                    final allDocs = snapshot.data?.docs ?? [];
 
-                    final filteredDocs =
-                        allDocs.where((doc) {
-                      final status =
-                          _getStatus(doc.data());
+                    final filteredDocs = allDocs.where((doc) {
+                      final status = _getStatus(doc.data());
 
                       if (selectedTab == 0) {
                         return status == 'pending';
@@ -430,28 +636,21 @@ class _AdminBeneficiariesPageState
                     }
 
                     return ListView.separated(
-                      padding:
-                          const EdgeInsets.fromLTRB(
+                      padding: const EdgeInsets.fromLTRB(
                         20,
                         5,
                         20,
                         30,
                       ),
-                      itemCount:
-                          filteredDocs.length,
-                      separatorBuilder:
-                          (context, index) =>
-                              const SizedBox(
-                        height: 12,
-                      ),
-                      itemBuilder:
-                          (context, index) {
-                        final doc =
-                            filteredDocs[index];
+                      itemCount: filteredDocs.length,
+                      separatorBuilder: (context, index) =>
+                          const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
+                        final doc = filteredDocs[index];
 
                         return _buildBeneficiaryCard(
-                          documentId: doc.id,
-                          data: doc.data(),
+                          beneficiaryId: doc.id,
+                          beneficiaryData: doc.data(),
                         );
                       },
                     );
@@ -484,19 +683,20 @@ class _AdminBeneficiariesPageState
               Navigator.pop(context);
             },
             icon: const Icon(
-              Icons.arrow_forward_rounded,
+              Icons.arrow_back_ios_new_rounded,
               color: AppDesign.primary,
             ),
           ),
 
-          Expanded(
+          const Expanded(
             child: Text(
-              'المستفيدون',
+              'إدارة المستفيدين',
               textAlign: TextAlign.center,
-              style: AppDesign.h1Style.copyWith(
-                color: AppDesign.primary,
-                fontSize: 24,
+              style: TextStyle(
+                fontFamily: AppDesign.fontFamily,
+                fontSize: 23,
                 fontWeight: FontWeight.w800,
+                color: AppDesign.primary,
               ),
             ),
           ),
@@ -513,7 +713,6 @@ class _AdminBeneficiariesPageState
 
   Widget _buildTabs() {
     return Container(
-      height: 54,
       padding: const EdgeInsets.all(5),
       decoration: BoxDecoration(
         color: AppDesign.white,
@@ -526,14 +725,14 @@ class _AdminBeneficiariesPageState
         children: [
           Expanded(
             child: _buildTab(
-              title: 'طلبات التسجيل',
               index: 0,
+              title: 'طلبات التسجيل',
             ),
           ),
           Expanded(
             child: _buildTab(
-              title: 'المستفيدون',
               index: 1,
+              title: 'المستفيدون',
             ),
           ),
         ],
@@ -542,21 +741,23 @@ class _AdminBeneficiariesPageState
   }
 
   Widget _buildTab({
-    required String title,
     required int index,
+    required String title,
   }) {
     final selected = selectedTab == index;
 
-    return GestureDetector(
+    return InkWell(
       onTap: () {
         setState(() {
           selectedTab = index;
         });
       },
+      borderRadius: BorderRadius.circular(14),
       child: AnimatedContainer(
-        duration:
-            const Duration(milliseconds: 180),
-        alignment: Alignment.center,
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(
+          vertical: 12,
+        ),
         decoration: BoxDecoration(
           color: selected
               ? AppDesign.primary
@@ -565,12 +766,12 @@ class _AdminBeneficiariesPageState
         ),
         child: Text(
           title,
+          textAlign: TextAlign.center,
           style: AppDesign.bodyStyle.copyWith(
             color: selected
                 ? AppDesign.white
                 : AppDesign.primary,
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w800,
           ),
         ),
       ),
@@ -578,168 +779,198 @@ class _AdminBeneficiariesPageState
   }
 
   // =========================================================
-  // Beneficiary card
+  // Beneficiary Card
   // =========================================================
 
   Widget _buildBeneficiaryCard({
-    required String documentId,
-    required Map<String, dynamic> data,
+    required String beneficiaryId,
+    required Map<String, dynamic> beneficiaryData,
   }) {
-    final name = _getName(data);
-    final phone = _getPhone(data);
+    final userId = _getUserId(
+      beneficiaryId,
+      beneficiaryData,
+    );
 
-    final firstLetter =
-        name.trim().isNotEmpty
-            ? name.trim()[0]
-            : 'م';
+    final status = _getStatus(beneficiaryData);
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: () {
-          _showBeneficiaryDetails(
-            documentId,
-            data,
-          );
-        },
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppDesign.white,
-            borderRadius:
-                BorderRadius.circular(20),
-            border: Border.all(
-              color: AppDesign.border,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color:
-                    Colors.black.withOpacity(0.035),
-                blurRadius: 12,
-                offset: const Offset(0, 5),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 25,
-                backgroundColor:
-                    AppDesign.secondary
-                        .withOpacity(0.17),
-                child: Text(
-                  firstLetter,
-                  style:
-                      AppDesign.h1Style.copyWith(
-                    color: AppDesign.primary,
-                    fontSize: 19,
-                    fontWeight: FontWeight.w800,
-                  ),
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: _getUserData(userId),
+      builder: (context, snapshot) {
+        final userData = snapshot.data;
+
+        final name = _getName(userData);
+        final phone = _getPhone(userData);
+
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(22),
+            onTap: snapshot.connectionState ==
+                    ConnectionState.waiting
+                ? null
+                : () {
+                    _showBeneficiaryDetails(
+                      beneficiaryId: beneficiaryId,
+                      beneficiaryUserId: userId,
+                      beneficiaryData: beneficiaryData,
+                      userData: userData,
+                    );
+                  },
+            child: Container(
+              padding: const EdgeInsets.all(17),
+              decoration: BoxDecoration(
+                color: AppDesign.white,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(
+                  color: AppDesign.border,
                 ),
               ),
-
-              const SizedBox(width: 14),
-
-              Expanded(
-                child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      maxLines: 1,
-                      overflow:
-                          TextOverflow.ellipsis,
-                      style:
-                          AppDesign.h1Style.copyWith(
-                        color: AppDesign.primary,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                      ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color:
+                          AppDesign.secondary.withOpacity(0.15),
+                      shape: BoxShape.circle,
                     ),
-
-                    const SizedBox(height: 6),
-
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.phone_outlined,
-                          size: 16,
-                          color:
-                              AppDesign.textSecondary,
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          phone,
-                          style:
-                              AppDesign.bodyStyle.copyWith(
-                            color: AppDesign
-                                .textSecondary,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              if (selectedTab == 0)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppDesign.softGreen
-                        .withOpacity(0.16),
-                    borderRadius:
-                        BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    'قيد المراجعة',
-                    style:
-                        AppDesign.bodyStyle.copyWith(
+                    child: const Icon(
+                      Icons.person_outline_rounded,
                       color: AppDesign.primary,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
+                      size: 27,
                     ),
                   ),
-                ),
 
-              const SizedBox(width: 7),
+                  const SizedBox(width: 14),
 
-              Icon(
-                Icons.arrow_back_ios_new_rounded,
-                size: 17,
-                color:
-                    AppDesign.primary.withOpacity(0.45),
+                  Expanded(
+                    child: snapshot.connectionState ==
+                            ConnectionState.waiting
+                        ? const LinearProgressIndicator(
+                            color: AppDesign.primary,
+                          )
+                        : Column(
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                name,
+                                maxLines: 1,
+                                overflow:
+                                    TextOverflow.ellipsis,
+                                style:
+                                    AppDesign.h1Style.copyWith(
+                                  color: AppDesign.primary,
+                                  fontSize: 18,
+                                  fontWeight:
+                                      FontWeight.w800,
+                                ),
+                              ),
+
+                              const SizedBox(height: 5),
+
+                              Text(
+                                phone,
+                                textDirection:
+                                    TextDirection.ltr,
+                                style:
+                                    AppDesign.bodyStyle.copyWith(
+                                  color:
+                                      AppDesign.textSecondary,
+                                  fontSize: 13,
+                                ),
+                              ),
+
+                              if (status == 'pending') ...[
+                                const SizedBox(height: 8),
+                                _buildStatusBadge(
+                                  'قيد المراجعة',
+                                  Icons.schedule_rounded,
+                                ),
+                              ],
+
+                              if (status == 'approved') ...[
+                                const SizedBox(height: 8),
+                                _buildStatusBadge(
+                                  'مقبول',
+                                  Icons.check_circle_outline,
+                                ),
+                              ],
+                            ],
+                          ),
+                  ),
+
+                  const Icon(
+                    Icons.arrow_back_ios_new_rounded,
+                    color: AppDesign.primary,
+                    size: 17,
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStatusBadge(
+    String text,
+    IconData icon,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 9,
+        vertical: 5,
+      ),
+      decoration: BoxDecoration(
+        color: AppDesign.secondary.withOpacity(0.13),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 14,
+            color: AppDesign.primary,
+          ),
+          const SizedBox(width: 5),
+          Text(
+            text,
+            style: AppDesign.bodyStyle.copyWith(
+              color: AppDesign.primary,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }
 
   // =========================================================
-  // Details Bottom Sheet
+  // Beneficiary Details
   // =========================================================
 
-  void _showBeneficiaryDetails(
-    String documentId,
-    Map<String, dynamic> data,
-  ) {
-    final name = _getName(data);
-    final phone = _getPhone(data);
-    final socialNumber =
-        _getSocialSecurityNumber(data);
-    final pdfUrl = _getPdfUrl(data);
-    final status = _getStatus(data);
+  Future<void> _showBeneficiaryDetails({
+    required String beneficiaryId,
+    required String beneficiaryUserId,
+    required Map<String, dynamic> beneficiaryData,
+    required Map<String, dynamic>? userData,
+  }) async {
+    final name = _getName(userData);
+    final phone = _getPhone(userData);
 
-    showModalBottomSheet(
+    final socialSecurityNumber =
+        _getSocialSecurityNumber(beneficiaryData);
+
+    final pdfUrl = _getPdfUrl(beneficiaryData);
+
+    final status = _getStatus(beneficiaryData);
+
+    await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -749,17 +980,7 @@ class _AdminBeneficiariesPageState
           child: Container(
             constraints: BoxConstraints(
               maxHeight:
-                  MediaQuery.of(context).size.height *
-                      0.82,
-            ),
-            padding: EdgeInsets.fromLTRB(
-              20,
-              14,
-              20,
-              24 +
-                  MediaQuery.of(context)
-                      .padding
-                      .bottom,
+                  MediaQuery.of(sheetContext).size.height * 0.88,
             ),
             decoration: const BoxDecoration(
               color: AppDesign.background,
@@ -768,13 +989,20 @@ class _AdminBeneficiariesPageState
               ),
             ),
             child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                14,
+                20,
+                MediaQuery.of(sheetContext).viewInsets.bottom +
+                    30,
+              ),
               child: Column(
                 crossAxisAlignment:
                     CrossAxisAlignment.stretch,
                 children: [
                   Center(
                     child: Container(
-                      width: 45,
+                      width: 48,
                       height: 5,
                       decoration: BoxDecoration(
                         color: AppDesign.border,
@@ -784,28 +1012,36 @@ class _AdminBeneficiariesPageState
                     ),
                   ),
 
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 24),
+
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color:
+                          AppDesign.secondary.withOpacity(0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.person_outline_rounded,
+                      color: AppDesign.primary,
+                      size: 36,
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
 
                   Text(
-                    status == 'pending'
-                        ? 'تفاصيل طلب التسجيل'
-                        : 'بيانات المستفيد',
+                    name,
                     textAlign: TextAlign.center,
-                    style:
-                        AppDesign.h1Style.copyWith(
+                    style: AppDesign.h1Style.copyWith(
                       color: AppDesign.primary,
-                      fontSize: 22,
+                      fontSize: 23,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
 
                   const SizedBox(height: 24),
-
-                  _buildDetailItem(
-                    icon: Icons.person_outline,
-                    label: 'الاسم',
-                    value: name,
-                  ),
 
                   _buildDetailItem(
                     icon: Icons.phone_outlined,
@@ -814,20 +1050,16 @@ class _AdminBeneficiariesPageState
                   ),
 
                   _buildDetailItem(
-                    icon:
-                        Icons.badge_outlined,
+                    icon: Icons.badge_outlined,
                     label: 'رقم الضمان الاجتماعي',
-                    value: socialNumber,
+                    value: socialSecurityNumber,
                   ),
-
-                  const SizedBox(height: 10),
 
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: AppDesign.white,
-                      borderRadius:
-                          BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                         color: AppDesign.border,
                       ),
@@ -841,14 +1073,11 @@ class _AdminBeneficiariesPageState
                             color: AppDesign.secondary
                                 .withOpacity(0.15),
                             borderRadius:
-                                BorderRadius.circular(
-                                    14),
+                                BorderRadius.circular(14),
                           ),
                           child: const Icon(
-                            Icons
-                                .picture_as_pdf_outlined,
-                            color:
-                                AppDesign.primary,
+                            Icons.picture_as_pdf_outlined,
+                            color: AppDesign.primary,
                           ),
                         ),
 
@@ -857,16 +1086,13 @@ class _AdminBeneficiariesPageState
                         Expanded(
                           child: Column(
                             crossAxisAlignment:
-                                CrossAxisAlignment
-                                    .start,
+                                CrossAxisAlignment.start,
                             children: [
                               Text(
                                 'إثبات الضمان الاجتماعي',
-                                style: AppDesign
-                                    .bodyStyle
-                                    .copyWith(
-                                  color:
-                                      AppDesign.primary,
+                                style:
+                                    AppDesign.bodyStyle.copyWith(
+                                  color: AppDesign.primary,
                                   fontWeight:
                                       FontWeight.w700,
                                 ),
@@ -876,11 +1102,10 @@ class _AdminBeneficiariesPageState
                                 pdfUrl.isEmpty
                                     ? 'لا يوجد ملف مرفق'
                                     : 'عرض الملف المرفق',
-                                style: AppDesign
-                                    .bodyStyle
-                                    .copyWith(
-                                  color: AppDesign
-                                      .textSecondary,
+                                style:
+                                    AppDesign.bodyStyle.copyWith(
+                                  color:
+                                      AppDesign.textSecondary,
                                   fontSize: 12,
                                 ),
                               ),
@@ -894,10 +1119,8 @@ class _AdminBeneficiariesPageState
                               _openPdf(pdfUrl);
                             },
                             icon: const Icon(
-                              Icons
-                                  .open_in_new_rounded,
-                              color:
-                                  AppDesign.primary,
+                              Icons.open_in_new_rounded,
+                              color: AppDesign.primary,
                             ),
                           ),
                       ],
@@ -912,8 +1135,11 @@ class _AdminBeneficiariesPageState
                       child: ElevatedButton.icon(
                         onPressed: () {
                           _approveBeneficiary(
-                            documentId,
-                            name,
+                            beneficiaryId:
+                                beneficiaryId,
+                            beneficiaryUserId:
+                                beneficiaryUserId,
+                            name: name,
                           );
                         },
                         icon: const Icon(
@@ -923,18 +1149,15 @@ class _AdminBeneficiariesPageState
                         label: const Text(
                           'قبول الطلب',
                         ),
-                        style:
-                            ElevatedButton.styleFrom(
+                        style: ElevatedButton.styleFrom(
                           backgroundColor:
                               AppDesign.primary,
                           foregroundColor:
                               Colors.white,
                           elevation: 0,
-                          shape:
-                              RoundedRectangleBorder(
+                          shape: RoundedRectangleBorder(
                             borderRadius:
-                                BorderRadius.circular(
-                                    18),
+                                BorderRadius.circular(18),
                           ),
                         ),
                       ),
@@ -947,22 +1170,22 @@ class _AdminBeneficiariesPageState
                       child: TextButton.icon(
                         onPressed: () {
                           _showRejectDialog(
-                            documentId,
-                            name,
+                            beneficiaryId:
+                                beneficiaryId,
+                            beneficiaryUserId:
+                                beneficiaryUserId,
+                            name: name,
                           );
                         },
                         icon: Icon(
                           Icons.close_rounded,
-                          color:
-                              Colors.red.shade700,
+                          color: Colors.red.shade700,
                         ),
                         label: Text(
                           'رفض الطلب',
                           style: TextStyle(
-                            color:
-                                Colors.red.shade700,
-                            fontWeight:
-                                FontWeight.w800,
+                            color: Colors.red.shade700,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
                       ),
@@ -975,23 +1198,22 @@ class _AdminBeneficiariesPageState
                       child: TextButton.icon(
                         onPressed: () {
                           _deleteBeneficiary(
-                            documentId,
-                            name,
+                            beneficiaryId:
+                                beneficiaryId,
+                            beneficiaryUserId:
+                                beneficiaryUserId,
+                            name: name,
                           );
                         },
                         icon: Icon(
-                          Icons
-                              .delete_outline_rounded,
-                          color:
-                              Colors.red.shade700,
+                          Icons.delete_outline_rounded,
+                          color: Colors.red.shade700,
                         ),
                         label: Text(
                           'حذف المستفيد',
                           style: TextStyle(
-                            color:
-                                Colors.red.shade700,
-                            fontWeight:
-                                FontWeight.w800,
+                            color: Colors.red.shade700,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
                       ),
@@ -1004,6 +1226,10 @@ class _AdminBeneficiariesPageState
       },
     );
   }
+
+  // =========================================================
+  // Detail Item
+  // =========================================================
 
   Widget _buildDetailItem({
     required IconData icon,
@@ -1027,7 +1253,9 @@ class _AdminBeneficiariesPageState
             color: AppDesign.primary,
             size: 22,
           ),
+
           const SizedBox(width: 12),
+
           Expanded(
             child: Column(
               crossAxisAlignment:
@@ -1035,18 +1263,17 @@ class _AdminBeneficiariesPageState
               children: [
                 Text(
                   label,
-                  style:
-                      AppDesign.bodyStyle.copyWith(
-                    color:
-                        AppDesign.textSecondary,
+                  style: AppDesign.bodyStyle.copyWith(
+                    color: AppDesign.textSecondary,
                     fontSize: 12,
                   ),
                 ),
+
                 const SizedBox(height: 3),
+
                 Text(
                   value,
-                  style:
-                      AppDesign.bodyStyle.copyWith(
+                  style: AppDesign.bodyStyle.copyWith(
                     color: AppDesign.primary,
                     fontWeight: FontWeight.w700,
                   ),
@@ -1060,10 +1287,18 @@ class _AdminBeneficiariesPageState
   }
 
   // =========================================================
-  // Empty / Error
+  // Empty State
   // =========================================================
 
   Widget _buildEmptyState() {
+    final title = selectedTab == 0
+        ? 'لا توجد طلبات تسجيل'
+        : 'لا يوجد مستفيدون حاليًا';
+
+    final subtitle = selectedTab == 0
+        ? 'ستظهر طلبات التسجيل الجديدة هنا'
+        : 'سيظهر المستفيدون المقبولون هنا';
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(30),
@@ -1074,29 +1309,36 @@ class _AdminBeneficiariesPageState
               width: 76,
               height: 76,
               decoration: BoxDecoration(
-                color: AppDesign.secondary
-                    .withOpacity(0.13),
+                color:
+                    AppDesign.secondary.withOpacity(0.13),
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                selectedTab == 0
-                    ? Icons
-                        .pending_actions_outlined
-                    : Icons.people_outline,
+              child: const Icon(
+                Icons.people_outline_rounded,
                 color: AppDesign.primary,
-                size: 34,
+                size: 36,
               ),
             ),
+
             const SizedBox(height: 18),
+
             Text(
-              selectedTab == 0
-                  ? 'لا توجد طلبات تسجيل حاليًا'
-                  : 'لا يوجد مستفيدون حاليًا',
+              title,
               textAlign: TextAlign.center,
               style: AppDesign.h1Style.copyWith(
                 color: AppDesign.primary,
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
+                fontSize: 19,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+
+            const SizedBox(height: 7),
+
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: AppDesign.bodyStyle.copyWith(
+                color: AppDesign.textSecondary,
               ),
             ),
           ],
@@ -1105,127 +1347,45 @@ class _AdminBeneficiariesPageState
     );
   }
 
+  // =========================================================
+  // Error State
+  // =========================================================
+
   Widget _buildErrorState() {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(30),
-        child: Text(
-          'تعذر تحميل بيانات المستفيدين',
-          textAlign: TextAlign.center,
-          style: AppDesign.bodyStyle.copyWith(
-            color: AppDesign.textSecondary,
-          ),
-        ),
-      ),
-    );
-  }
-
-  // =========================================================
-  // Confirmation Dialog
-  // =========================================================
-
-  Future<bool> _showConfirmDialog({
-    required String title,
-    required String message,
-    required String confirmText,
-    bool destructive = false,
-  }) async {
-    final result = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        return Directionality(
-          textDirection: TextDirection.rtl,
-          child: AlertDialog(
-            backgroundColor: AppDesign.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.error_outline_rounded,
+              size: 48,
+              color: Colors.red.shade700,
             ),
-            title: Text(
-              title,
+
+            const SizedBox(height: 14),
+
+            Text(
+              'تعذر تحميل بيانات المستفيدين',
               textAlign: TextAlign.center,
               style: AppDesign.h1Style.copyWith(
                 color: AppDesign.primary,
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
+                fontSize: 18,
               ),
             ),
-            content: Text(
-              message,
+
+            const SizedBox(height: 6),
+
+            Text(
+              'تحقق من الاتصال وحاول مرة أخرى',
               textAlign: TextAlign.center,
               style: AppDesign.bodyStyle.copyWith(
                 color: AppDesign.textSecondary,
               ),
             ),
-            actionsAlignment:
-                MainAxisAlignment.center,
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(
-                    dialogContext,
-                    false,
-                  );
-                },
-                child: Text(
-                  'إلغاء',
-                  style: AppDesign.bodyStyle.copyWith(
-                    color:
-                        AppDesign.textSecondary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(
-                    dialogContext,
-                    true,
-                  );
-                },
-                child: Text(
-                  confirmText,
-                  style: AppDesign.bodyStyle.copyWith(
-                    color: destructive
-                        ? Colors.red.shade700
-                        : AppDesign.primary,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-
-    return result ?? false;
-  }
-
-  // =========================================================
-  // Messages
-  // =========================================================
-
-  void _showSuccessSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          textAlign: TextAlign.center,
+          ],
         ),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          textAlign: TextAlign.center,
-        ),
-        behavior: SnackBarBehavior.floating,
       ),
     );
   }
