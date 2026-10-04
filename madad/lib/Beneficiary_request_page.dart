@@ -2,31 +2,52 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'app_design.dart';
 import 'Beneficiary_more_page.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
 /// ─────────────── إعدادات قاعدة البيانات ───────────────
+const String kRequestsCollection = 'requests';
 const String kBoxesCollection = 'donation_boxes';
 
-/// الحقل الذي يربط الصندوق بالمستفيد
+/// الحقل الذي يربط الطلب بالمستفيد
 const String kBeneficiaryIdField = 'beneficiaryId';
 
-/// حالات الصناديق التي تظهر في تبويب "الطلبات النشطة"
+/// الحقل داخل donation_boxes الذي يربط الصندوق بالطلب (عدّله حسب قاعدتك)
+const String kBoxRequestIdField = 'requestId';
+
+/// حالات الطلبات التي تظهر في تبويب "الطلبات النشطة"
 const List<String> kActiveStatuses = [
+  'requested',
   'reserved',
   'delivered',
 ];
 
-/// حالات الصناديق التي تظهر في تبويب "الطلبات السابقة"
+/// الحالة المكتملة (تُستخدم في كل الملف)
+const String kCompletedStatus = 'completed';
+
+/// حالات الطلبات التي تظهر في تبويب "الطلبات السابقة"
 const List<String> kPreviousStatuses = [
-  'complete',
+  kCompletedStatus,
 ];
 
 const Map<String, String> kStatusLabels = {
-  'reserved': 'تم الطلب',
+  'requested': 'تم الطلب',
+  'reserved': 'تم الحجز',
   'delivered': 'جاري التوصيل',
-  'complete': 'تم التوصيل',
+  'completed': 'تم التوصيل',
 };
 
-String _statusLabel(String s) => kStatusLabels[s] ?? 'مؤكد';
+String _statusLabel(String s) => kStatusLabels[s] ?? s;
+
+String _deliveryLabel(String m) {
+  switch (m) {
+    case 'pickup':
+      return 'استلام من المستودع';
+    case 'delivery':
+      return 'توصيل للموقع';
+    default:
+      return m.isEmpty ? 'استلام من المستودع' : m;
+  }
+}
 
 DateTime? _toDate(dynamic v) {
   if (v is Timestamp) return v.toDate();
@@ -34,11 +55,11 @@ DateTime? _toDate(dynamic v) {
   return null;
 }
 
-class _BoxData {
-  final String id;
-  final Map<String, dynamic> data;
-
-  const _BoxData(this.id, this.data);
+String _fmtDate(DateTime? d) {
+  if (d == null) return '';
+  final l = d.toLocal();
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${l.year}/${two(l.month)}/${two(l.day)}  ${two(l.hour)}:${two(l.minute)}';
 }
 
 /// ═══════════════════════════ الصفحة ═══════════════════════════
@@ -51,8 +72,7 @@ class BeneficiaryOrdersPage extends StatefulWidget {
   });
 
   @override
-  State<BeneficiaryOrdersPage> createState() =>
-      _BeneficiaryOrdersPageState();
+  State<BeneficiaryOrdersPage> createState() => _BeneficiaryOrdersPageState();
 }
 
 class _BeneficiaryOrdersPageState extends State<BeneficiaryOrdersPage> {
@@ -75,7 +95,7 @@ class _BeneficiaryOrdersPageState extends State<BeneficiaryOrdersPage> {
               _buildHeader(),
               _buildTabs(),
               Expanded(
-                child: _buildBoxesList(),
+                child: _buildRequestsList(),
               ),
             ],
           ),
@@ -151,9 +171,7 @@ class _BeneficiaryOrdersPageState extends State<BeneficiaryOrdersPage> {
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
-            color: selected
-                ? AppDesign.primary
-                : Colors.transparent,
+            color: selected ? AppDesign.primary : Colors.transparent,
             borderRadius: BorderRadius.circular(20),
           ),
           alignment: Alignment.center,
@@ -162,9 +180,7 @@ class _BeneficiaryOrdersPageState extends State<BeneficiaryOrdersPage> {
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w800,
-              color: selected
-                  ? Colors.white
-                  : AppDesign.primary,
+              color: selected ? Colors.white : AppDesign.primary,
             ),
           ),
         ),
@@ -173,78 +189,47 @@ class _BeneficiaryOrdersPageState extends State<BeneficiaryOrdersPage> {
   }
 
   // ───────────────────────── قائمة الطلبات ─────────────────────────
-  Widget _buildBoxesList() {
+  Widget _buildRequestsList() {
     final isActiveTab = _tabIndex == 0;
 
-    /// جلب الصناديق المرتبطة بالمستفيد الحالي
-    /// عن طريق beneficiaryId
-    Query<Map<String, dynamic>> query =
-        FirebaseFirestore.instance
-            .collection(kBoxesCollection)
-            .where(
-              kBeneficiaryIdField,
-              isEqualTo: widget.userId,
-            );
-
-    /// النشطة:
-    /// reserved + delivered
-    ///
-    /// السابقة:
-    /// complete فقط
-    query = isActiveTab
-        ? query.where(
-            'status',
-            whereIn: kActiveStatuses,
-          )
-        : query.where(
-            'status',
-            whereIn: kPreviousStatuses,
-          );
+    /// جلب الطلبات الخاصة بالمستفيد الحالي من كولكشن requests
+    final Query<Map<String, dynamic>> query = FirebaseFirestore.instance
+        .collection(kRequestsCollection)
+        .where(kBeneficiaryIdField, isEqualTo: widget.userId)
+        .where(
+          'status',
+          whereIn: isActiveTab ? kActiveStatuses : kPreviousStatuses,
+        );
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: query.snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return const Center(
-            child: Text(
-              "حدث خطأ أثناء تحميل الطلبات",
-            ),
+            child: Text("حدث خطأ أثناء تحميل الطلبات"),
           );
         }
 
-        if (snapshot.connectionState ==
-            ConnectionState.waiting) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
             child: CircularProgressIndicator(),
           );
         }
 
-        final docs = [
-          ...?snapshot.data?.docs,
-        ];
+        final docs = [...?snapshot.data?.docs];
 
-        // ─────────────────────────
-        // ترتيب الأحدث حجزاً أولاً
-        // ─────────────────────────
+        // ترتيب الأحدث أولاً
         docs.sort((a, b) {
-          final da = _toDate(
-            a.data()['reservedAt'],
-          );
-
-          final db = _toDate(
-            b.data()['reservedAt'],
-          );
+          final da = _toDate(a.data()['createdAt']);
+          final db = _toDate(b.data()['createdAt']);
 
           if (da != null && db != null) {
             return db.compareTo(da);
           }
-
           return 0;
         });
 
-        // ─────────────────────────
         // لا توجد طلبات
-        // ─────────────────────────
         if (docs.isEmpty) {
           return Center(
             child: Column(
@@ -253,8 +238,7 @@ class _BeneficiaryOrdersPageState extends State<BeneficiaryOrdersPage> {
                 Icon(
                   Icons.volunteer_activism_outlined,
                   size: 56,
-                  color:
-                      AppDesign.primary.withOpacity(0.4),
+                  color: AppDesign.primary.withOpacity(0.4),
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -271,58 +255,17 @@ class _BeneficiaryOrdersPageState extends State<BeneficiaryOrdersPage> {
           );
         }
 
-        // ─────────────────────────
-        // تجميع الصناديق حسب orderId
-        // كارد واحد لكل طلب
-        // ─────────────────────────
-        final groups =
-            <String, List<_BoxData>>{};
-
-        for (final d in docs) {
-          final data = d.data();
-
-          final orderId =
-              (data['orderId'] ?? d.id).toString();
-
-          groups
-              .putIfAbsent(
-                orderId,
-                () => [],
-              )
-              .add(
-                _BoxData(
-                  d.id,
-                  data,
-                ),
-              );
-        }
-
-        final orders = groups.entries.toList();
-
         return ListView.separated(
-          padding: const EdgeInsets.fromLTRB(
-            16,
-            4,
-            16,
-            16,
-          ),
-          itemCount: orders.length,
-          separatorBuilder: (_, __) =>
-              const SizedBox(height: 14),
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+          itemCount: docs.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 14),
           itemBuilder: (context, index) {
-            final e = orders[index];
-
-            final status =
-                (e.value.first.data['status'] ??
-                        kActiveStatuses.first)
-                    .toString();
+            final doc = docs[index];
 
             return OrderCard(
-              key: ValueKey(
-                '${_tabIndex}_${e.key}',
-              ),
-              status: status,
-              boxes: e.value,
+              key: ValueKey('${_tabIndex}_${doc.id}'),
+              requestId: doc.id,
+              data: doc.data(),
             );
           },
         );
@@ -333,17 +276,10 @@ class _BeneficiaryOrdersPageState extends State<BeneficiaryOrdersPage> {
   // ───────────────────────── البوتوم ناف ─────────────────────────
   Widget _buildBottomNav() {
     return Container(
-      margin: const EdgeInsets.fromLTRB(
-        16,
-        0,
-        16,
-        14,
-      ),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 14),
       decoration: BoxDecoration(
         color: AppDesign.white,
-        borderRadius: BorderRadius.circular(
-          AppDesign.radiusXL,
-        ),
+        borderRadius: BorderRadius.circular(AppDesign.radiusXL),
         boxShadow: [
           BoxShadow(
             color: AppDesign.black.withOpacity(0.06),
@@ -356,11 +292,9 @@ class _BeneficiaryOrdersPageState extends State<BeneficiaryOrdersPage> {
         height: 78,
         selectedIndex: _bottomNavIndex,
         backgroundColor: Colors.transparent,
-        indicatorColor:
-            AppDesign.secondary.withOpacity(0.16),
+        indicatorColor: AppDesign.secondary.withOpacity(0.16),
         surfaceTintColor: Colors.transparent,
-        labelBehavior:
-            NavigationDestinationLabelBehavior.alwaysShow,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         onDestinationSelected: (index) {
           if (index == 1) return;
 
@@ -378,8 +312,7 @@ class _BeneficiaryOrdersPageState extends State<BeneficiaryOrdersPage> {
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
-                builder: (_) =>
-                    BeneficiaryMorePage(
+                builder: (_) => BeneficiaryMorePage(
                   userId: widget.userId,
                 ),
               ),
@@ -389,23 +322,17 @@ class _BeneficiaryOrdersPageState extends State<BeneficiaryOrdersPage> {
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.home_outlined),
-            selectedIcon:
-                Icon(Icons.home_rounded),
+            selectedIcon: Icon(Icons.home_rounded),
             label: 'الرئيسية',
           ),
           NavigationDestination(
-            icon: Icon(
-              Icons.volunteer_activism_outlined,
-            ),
-            selectedIcon: Icon(
-              Icons.volunteer_activism_rounded,
-            ),
+            icon: Icon(Icons.volunteer_activism_outlined),
+            selectedIcon: Icon(Icons.volunteer_activism_rounded),
             label: 'طلباتي',
           ),
           NavigationDestination(
             icon: Icon(Icons.more_horiz),
-            selectedIcon:
-                Icon(Icons.more_horiz),
+            selectedIcon: Icon(Icons.more_horiz),
             label: 'المزيد',
           ),
         ],
@@ -416,69 +343,37 @@ class _BeneficiaryOrdersPageState extends State<BeneficiaryOrdersPage> {
 
 /// ═══════════════════════════ كارد الطلب ═══════════════════════════
 class OrderCard extends StatelessWidget {
-  final String status;
-  final List<_BoxData> boxes;
+  final String requestId;
+  final Map<String, dynamic> data;
 
   const OrderCard({
     super.key,
-    required this.status,
-    required this.boxes,
+    required this.requestId,
+    required this.data,
   });
 
   @override
   Widget build(BuildContext context) {
-    // الجنس والفئة العمرية من أول بوكس
-    // + مجموع القطع
-    String gender = '';
-    String age = '';
-    int totalItems = 0;
-    String boxDeliveryMethod = '';
+    final status = (data['status'] ?? '').toString();
+    final method = (data['deliveryMethod'] ?? '').toString();
+    final createdAt = _toDate(data['createdAt']);
 
-    for (final b in boxes) {
-      final d = b.data;
+    final addr = data['deliveryAddress'];
+    final warehouseName =
+        addr is Map ? (addr['warehouseName'] ?? '').toString() : '';
 
-      if (gender.isEmpty) {
-        gender = (d['gender'] ?? '').toString();
-      }
+    final shortId =
+        requestId.length < 6 ? requestId : requestId.substring(0, 6);
 
-      if (age.isEmpty) {
-        final ag = d['ageGroup'];
-
-        age = ag is Map
-            ? (ag['label'] ?? '').toString()
-            : '';
-      }
-
-      if (boxDeliveryMethod.isEmpty) {
-        boxDeliveryMethod =
-            (d['deliveryMethod'] ?? '').toString();
-      }
-
-      final items = d['items'];
-
-      if (items is List) {
-        totalItems += items.length;
-      }
-    }
-
-    final title = [
-      gender,
-      age,
-    ].where((s) => s.isNotEmpty).join(' - ');
-
-    final deliveryText =
-        boxDeliveryMethod.isNotEmpty
-            ? boxDeliveryMethod
-            : 'استلام من موقعي';
+    // أيقونة المسح تظهر فقط للاستلام من المستودع وقبل اكتمال الطلب
+    final canScan = method == 'pickup' && status != kCompletedStatus;
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: Colors.grey.shade200,
-        ),
+        border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
@@ -487,20 +382,16 @@ class OrderCard extends StatelessWidget {
         ],
       ),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ─── العنوان + الحالة + الأيقونة ───
           Row(
             children: [
               Expanded(
                 child: Text(
-                  title.isEmpty
-                      ? 'تبرع'
-                      : 'تبرع ($title)',
-                  maxLines: 2,
-                  overflow:
-                      TextOverflow.ellipsis,
+                  'طلب #$shortId',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w800,
@@ -508,27 +399,18 @@ class OrderCard extends StatelessWidget {
                   ),
                 ),
               ),
-
               const SizedBox(width: 8),
-
-              _StatusChip(
-                label: _statusLabel(status),
-              ),
-
+              _StatusChip(label: _statusLabel(status)),
               const SizedBox(width: 8),
-
               Container(
                 width: 38,
                 height: 38,
                 decoration: BoxDecoration(
-                  color: AppDesign.secondary
-                      .withOpacity(0.16),
-                  borderRadius:
-                      BorderRadius.circular(12),
+                  color: AppDesign.secondary.withOpacity(0.16),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
-                  Icons
-                      .volunteer_activism_rounded,
+                  Icons.volunteer_activism_rounded,
                   size: 20,
                   color: AppDesign.primary,
                 ),
@@ -538,69 +420,83 @@ class OrderCard extends StatelessWidget {
 
           const SizedBox(height: 14),
 
-          // ─── معلومات التبرع ───
+          // ─── معلومات الطلب ───
           _InfoBox(
             children: [
-              if (gender.isNotEmpty)
+              if (createdAt != null)
                 _InfoRow(
-                  icon: Icons.wc_rounded,
-                  label: 'الجنس',
-                  value: gender,
+                  icon: Icons.event_outlined,
+                  label: 'تاريخ الطلب',
+                  value: _fmtDate(createdAt),
                 ),
-
-              if (age.isNotEmpty)
-                _InfoRow(
-                  icon: Icons.cake_outlined,
-                  label: 'الفئة العمرية',
-                  value: age,
-                ),
-
               _InfoRow(
-                icon:
-                    Icons.inventory_2_outlined,
-                label: 'عدد القطع',
-                value: '$totalItems قطع',
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 10),
-
-          // ─── طريقة التوصيل ───
-          _InfoBox(
-            children: [
-              _InfoRow(
-                icon:
-                    Icons.local_shipping_outlined,
+                icon: Icons.local_shipping_outlined,
                 label: 'طريقة التوصيل',
-                value: deliveryText,
+                value: _deliveryLabel(method),
+                trailing: canScan
+                    ? IconButton(
+                        tooltip: 'مسح الباركود لتأكيد الاستلام',
+                        visualDensity: VisualDensity.compact,
+                        icon: Icon(
+                          Icons.qr_code_scanner_rounded,
+                          color: AppDesign.primary,
+                        ),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  PickupScanPage(requestId: requestId),
+                            ),
+                          );
+                        },
+                      )
+                    : null,
               ),
+              if (warehouseName.isNotEmpty)
+                _InfoRow(
+                  icon: Icons.warehouse_outlined,
+                  label: 'المستودع',
+                  value: warehouseName,
+                ),
             ],
           ),
 
-          const SizedBox(height: 16),
+          // ─── الصناديق المرتبطة بالطلب (إن وجدت) ───
+          StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: FirebaseFirestore.instance
+                .collection(kBoxesCollection)
+                .where(kBoxRequestIdField, isEqualTo: requestId)
+                .snapshots(),
+            builder: (context, snap) {
+              final boxes = snap.data?.docs ?? [];
+              if (boxes.isEmpty) return const SizedBox.shrink();
 
-          // ─── الصناديق ───
-          Text(
-            'الصناديق',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-              color: AppDesign.primary,
-            ),
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 16),
+                  Text(
+                    'الصناديق',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: AppDesign.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  for (final b in boxes)
+                    _BoxTile(
+                      boxId: b.id,
+                      data: b.data(),
+                      statusLabel: _statusLabel(
+                        (b.data()['status'] ?? status).toString(),
+                      ),
+                    ),
+                ],
+              );
+            },
           ),
-
-          const SizedBox(height: 8),
-
-          for (final b in boxes)
-            _BoxTile(
-              boxId: b.id,
-              data: b.data,
-              statusLabel: _statusLabel(
-                (b.data['status'] ?? status)
-                    .toString(),
-              ),
-            ),
         ],
       ),
     );
@@ -622,10 +518,7 @@ class _BoxTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final code =
-        (data['boxCode'] ??
-                data['code'] ??
-                data['boxNumber'] ??
-                boxId)
+        (data['boxCode'] ?? data['code'] ?? data['boxNumber'] ?? boxId)
             .toString();
 
     // BOX1-SK8A9
@@ -633,29 +526,16 @@ class _BoxTile extends StatelessWidget {
     // SK8A9 = رمادي
     final dash = code.indexOf('-');
 
-    final head = dash == -1
-        ? code
-        : code.substring(0, dash + 1);
+    final head = dash == -1 ? code : code.substring(0, dash + 1);
+    final tail = dash == -1 ? '' : code.substring(dash + 1);
 
-    final tail = dash == -1
-        ? ''
-        : code.substring(dash + 1);
-
-    final items =
-        data['items'] is List
-            ? data['items'] as List
-            : const [];
+    final items = data['items'] is List ? data['items'] as List : const [];
 
     return Container(
-      margin: const EdgeInsets.only(
-        bottom: 8,
-      ),
+      margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.grey.shade200,
-        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
       ),
       child: Theme(
         data: Theme.of(context).copyWith(
@@ -663,20 +543,10 @@ class _BoxTile extends StatelessWidget {
         ),
         child: ExpansionTile(
           initiallyExpanded: true,
-          tilePadding:
-              const EdgeInsets.symmetric(
-            horizontal: 12,
-          ),
-          childrenPadding:
-              const EdgeInsets.fromLTRB(
-            10,
-            0,
-            10,
-            10,
-          ),
+          tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+          childrenPadding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
           shape: const Border(),
           collapsedShape: const Border(),
-
           title: Row(
             children: [
               Text.rich(
@@ -685,43 +555,28 @@ class _BoxTile extends StatelessWidget {
                     TextSpan(
                       text: head,
                       style: TextStyle(
-                        color:
-                            AppDesign.primary,
-                        fontWeight:
-                            FontWeight.w800,
+                        color: AppDesign.primary,
+                        fontWeight: FontWeight.w800,
                         fontSize: 15,
                       ),
                     ),
                     TextSpan(
                       text: tail,
                       style: TextStyle(
-                        color:
-                            Colors.grey.shade500,
-                        fontWeight:
-                            FontWeight.w800,
+                        color: Colors.grey.shade500,
+                        fontWeight: FontWeight.w800,
                         fontSize: 15,
                       ),
                     ),
                   ],
                 ),
-                textDirection:
-                    TextDirection.ltr,
+                textDirection: TextDirection.ltr,
               ),
-
               const Spacer(),
-
-           
-
-           
             ],
           ),
-
           children: [
-            for (
-              int i = 0;
-              i < items.length;
-              i++
-            )
+            for (int i = 0; i < items.length; i++)
               _ItemTile(
                 index: i,
                 item: items[i],
@@ -745,106 +600,70 @@ class _ItemTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final map =
-        item is Map
-            ? item as Map
-            : const {};
+    final map = item is Map ? item as Map : const {};
 
-    final imageUrl =
-        map['imageUrl']?.toString();
+    final imageUrl = map['imageUrl']?.toString();
 
     final type =
-        (map['type'] ??
-                map['category'] ??
-                map['name'] ??
-                map['title'] ??
-                '')
+        (map['type'] ?? map['category'] ?? map['name'] ?? map['title'] ?? '')
             .toString();
 
     return Container(
-      margin:
-          const EdgeInsets.only(top: 8),
-      padding:
-          const EdgeInsets.all(8),
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius:
-            BorderRadius.circular(14),
-        border: Border.all(
-          color: Colors.grey.shade200,
-        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade200),
       ),
       child: Row(
         children: [
           ClipRRect(
-            borderRadius:
-                BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(12),
             child: SizedBox(
               width: 56,
               height: 56,
-              child:
-                  (imageUrl == null ||
-                          imageUrl.isEmpty)
-                      ? Container(
-                          color:
-                              Colors.grey.shade200,
-                          child: Icon(
-                            Icons
-                                .checkroom_outlined,
-                            color:
-                                Colors.grey.shade500,
-                          ),
-                        )
-                      : Image.network(
-                          imageUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder:
-                              (
-                                _,
-                                __,
-                                ___,
-                              ) =>
-                                  Container(
-                            color:
-                                Colors.grey.shade200,
-                            child:
-                                const Icon(
-                              Icons
-                                  .broken_image,
-                              color:
-                                  Colors.grey,
-                            ),
-                          ),
+              child: (imageUrl == null || imageUrl.isEmpty)
+                  ? Container(
+                      color: Colors.grey.shade200,
+                      child: Icon(
+                        Icons.checkroom_outlined,
+                        color: Colors.grey.shade500,
+                      ),
+                    )
+                  : Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: Colors.grey.shade200,
+                        child: const Icon(
+                          Icons.broken_image,
+                          color: Colors.grey,
                         ),
+                      ),
+                    ),
             ),
           ),
-
           const SizedBox(width: 12),
-
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'القطعة ${index + 1}',
                   style: TextStyle(
                     fontSize: 14,
-                    fontWeight:
-                        FontWeight.w800,
-                    color:
-                        Colors.grey.shade900,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.grey.shade900,
                   ),
                 ),
-
                 if (type.isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Text(
                     type,
                     style: TextStyle(
                       fontSize: 12,
-                      color:
-                          Colors.grey.shade600,
+                      color: Colors.grey.shade600,
                     ),
                   ),
                 ],
@@ -869,17 +688,10 @@ class _InfoBox extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding:
-          const EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 8,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.grey.shade200,
-        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
       ),
       child: Column(
         children: children,
@@ -892,20 +704,19 @@ class _InfoRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
+  final Widget? trailing;
 
   const _InfoRow({
     required this.icon,
     required this.label,
     required this.value,
+    this.trailing,
   });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding:
-          const EdgeInsets.symmetric(
-        vertical: 6,
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
           Icon(
@@ -913,32 +724,26 @@ class _InfoRow extends StatelessWidget {
             size: 18,
             color: AppDesign.primary,
           ),
-
           const SizedBox(width: 8),
-
           Text(
             label,
             style: TextStyle(
               fontSize: 12,
-              color:
-                  Colors.grey.shade500,
+              color: Colors.grey.shade500,
             ),
           ),
-
           const SizedBox(width: 8),
-
           Expanded(
             child: Text(
               value,
               style: TextStyle(
                 fontSize: 13,
-                fontWeight:
-                    FontWeight.w800,
-                color:
-                    Colors.grey.shade900,
+                fontWeight: FontWeight.w800,
+                color: Colors.grey.shade900,
               ),
             ),
           ),
+          if (trailing != null) trailing!,
         ],
       ),
     );
@@ -956,24 +761,199 @@ class _StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding:
-          const EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 8,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: AppDesign.secondary
-            .withOpacity(0.16),
-        borderRadius:
-            BorderRadius.circular(14),
+        color: AppDesign.secondary.withOpacity(0.16),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Text(
         label,
         style: TextStyle(
           fontSize: 11,
-          fontWeight:
-              FontWeight.w700,
+          fontWeight: FontWeight.w700,
           color: AppDesign.primary,
+        ),
+      ),
+    );
+  }
+}
+
+/// ═══════════════════════════ صفحة مسح الباركود (تأكيد الاستلام) ═══════════════════════════
+/// صفحة مسح باركود الصندوق لتأكيد الاستلام من المستودع.
+/// ترجع true عند نجاح تأكيد استلام صندوق.
+class PickupScanPage extends StatefulWidget {
+  final String requestId;
+
+  const PickupScanPage({super.key, required this.requestId});
+
+  @override
+  State<PickupScanPage> createState() => _PickupScanPageState();
+}
+
+class _PickupScanPageState extends State<PickupScanPage> {
+  final MobileScannerController _controller = MobileScannerController(
+    detectionSpeed: DetectionSpeed.noDuplicates,
+    formats: const [BarcodeFormat.all],
+  );
+
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  String _normalize(String s) => s.trim().toLowerCase();
+
+  String _codeOf(Map<String, dynamic> d, String fallback) =>
+      (d['boxCode'] ?? d['code'] ?? d['boxNumber'] ?? fallback).toString();
+
+  void _toast(String msg, {bool error = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg, textAlign: TextAlign.center),
+        backgroundColor: error ? Colors.red.shade700 : Colors.green.shade700,
+      ),
+    );
+  }
+
+  Future<void> _onDetect(BarcodeCapture capture) async {
+    if (_busy) return;
+
+    final raw = capture.barcodes
+        .map((b) => b.rawValue)
+        .firstWhere((v) => v != null && v.trim().isNotEmpty, orElse: () => null);
+    if (raw == null) return;
+
+    setState(() => _busy = true);
+
+    try {
+      final db = FirebaseFirestore.instance;
+
+      final snap = await db
+          .collection(kBoxesCollection)
+          .where(kBoxRequestIdField, isEqualTo: widget.requestId)
+          .get();
+
+      // دوّر على الصندوق اللي كوده يطابق الباركود
+      QueryDocumentSnapshot<Map<String, dynamic>>? match;
+      for (final d in snap.docs) {
+        if (_normalize(_codeOf(d.data(), d.id)) == _normalize(raw)) {
+          match = d;
+          break;
+        }
+      }
+
+      if (match == null) {
+        _toast('هذا الباركود لا يخص طلبك', error: true);
+        await Future.delayed(const Duration(seconds: 2));
+        if (mounted) setState(() => _busy = false);
+        return;
+      }
+
+      if (match.data()['status'] == kCompletedStatus) {
+        _toast('تم تأكيد استلام هذا الصندوق مسبقاً', error: true);
+        await Future.delayed(const Duration(seconds: 2));
+        if (mounted) setState(() => _busy = false);
+        return;
+      }
+
+      // 1) تأكيد استلام الصندوق
+      await match.reference.update({
+        'status': kCompletedStatus,
+        'receivedAt': FieldValue.serverTimestamp(),
+      });
+
+      // 2) إذا كل الصناديق انستلمت، اقفل الطلب
+      final remaining = snap.docs.where(
+        (d) => d.id != match!.id && d.data()['status'] != kCompletedStatus,
+      );
+
+      if (remaining.isEmpty) {
+        await db.collection(kRequestsCollection).doc(widget.requestId).update({
+          'status': kCompletedStatus,
+          'deliveredAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      if (!mounted) return;
+      _toast(remaining.isEmpty
+          ? 'تم تأكيد استلام الطلب بالكامل'
+          : 'تم تأكيد استلام الصندوق، باقي ${remaining.length}');
+
+      if (remaining.isEmpty) {
+        Navigator.pop(context, true);
+      } else {
+        await Future.delayed(const Duration(seconds: 2));
+        if (mounted) setState(() => _busy = false);
+      }
+    } catch (e) {
+      _toast('حدث خطأ، حاول مرة ثانية', error: true);
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        appBar: AppBar(
+          backgroundColor: AppDesign.primary,
+          foregroundColor: Colors.white,
+          title: const Text('تأكيد الاستلام'),
+          centerTitle: true,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.flash_on),
+              onPressed: () => _controller.toggleTorch(),
+            ),
+          ],
+        ),
+        body: Stack(
+          children: [
+            MobileScanner(
+              controller: _controller,
+              onDetect: _onDetect,
+            ),
+            // إطار التوجيه
+            Center(
+              child: Container(
+                width: 260,
+                height: 260,
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.white, width: 3),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 24,
+              right: 24,
+              bottom: 40,
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.6),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Text(
+                  'وجّه الكاميرا نحو باركود الصندوق لتأكيد استلامه',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white, fontSize: 14),
+                ),
+              ),
+            ),
+            if (_busy)
+              Container(
+                color: Colors.black38,
+                child: const Center(child: CircularProgressIndicator()),
+              ),
+          ],
         ),
       ),
     );
