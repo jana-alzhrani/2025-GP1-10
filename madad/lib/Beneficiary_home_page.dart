@@ -4,17 +4,23 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'app_design.dart';
 import 'Beneficiary_more_page.dart';
 import 'Beneficiary_view_donation_page.dart';
+import 'Beneficiary_request_page.dart';
+import 'Beneficiary_cart_page.dart';
 
 class BeneficiaryHomePage extends StatefulWidget {
   final String userId;
 
-  const BeneficiaryHomePage({super.key, required this.userId});
+  const BeneficiaryHomePage({
+    super.key,
+    required this.userId,
+  });
 
   @override
   State<BeneficiaryHomePage> createState() => _BeneficiaryHomePageState();
 }
+class _BeneficiaryHomePageState
+    extends State<BeneficiaryHomePage> {
 
-class _BeneficiaryHomePageState extends State<BeneficiaryHomePage> {
   int _bottomNavIndex = 0;
 
   String selectedGender = "الكل";
@@ -58,13 +64,14 @@ class _BeneficiaryHomePageState extends State<BeneficiaryHomePage> {
 
     for (var doc in snapshot.docs) {
       final d = doc.data();
-
+print(d);
       List<String> imagesList = [];
 
       final items = d['items'];
       if (items is List) {
         for (var item in items) {
-          if (item is Map && item['imageUrl'] != null) {
+          if (item is Map &&
+              item['imageUrl'] != null) {
             imagesList.add(item['imageUrl']);
           }
         }
@@ -76,6 +83,7 @@ class _BeneficiaryHomePageState extends State<BeneficiaryHomePage> {
         "gender": d['gender'] ?? 'الكل',
         "age": d['ageGroup']?['label'] ?? 'الكل',
         "images": imagesList,
+        
       });
     }
 
@@ -93,11 +101,13 @@ class _BeneficiaryHomePageState extends State<BeneficiaryHomePage> {
     return boxes.where((box) {
       final genderOk =
           selectedGender == "الكل" ||
-          normalize(box["gender"]) == normalize(selectedGender);
+              normalize(box["gender"]) ==
+                  normalize(selectedGender);
 
       final ageOk =
           selectedAge == "الكل" ||
-          normalize(box["age"]) == normalize(selectedAge);
+              normalize(box["age"]) ==
+                  normalize(selectedAge);
 
       return genderOk && ageOk;
     }).toList();
@@ -111,14 +121,17 @@ class _BeneficiaryHomePageState extends State<BeneficiaryHomePage> {
       backgroundColor: AppDesign.background,
 
       bottomNavigationBar: Container(
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+        margin:
+            const EdgeInsets.fromLTRB(16, 0, 16, 14),
 
         decoration: BoxDecoration(
           color: AppDesign.white,
-          borderRadius: BorderRadius.circular(AppDesign.radiusXL),
+          borderRadius:
+              BorderRadius.circular(AppDesign.radiusXL),
           boxShadow: [
             BoxShadow(
-              color: AppDesign.black.withOpacity(0.06),
+              color:
+                  AppDesign.black.withOpacity(0.06),
               blurRadius: 18,
               offset: const Offset(0, 8),
             ),
@@ -134,11 +147,14 @@ class _BeneficiaryHomePageState extends State<BeneficiaryHomePage> {
 
             backgroundColor: Colors.transparent,
 
-            indicatorColor: AppDesign.secondary.withOpacity(0.16),
+            indicatorColor:
+                AppDesign.secondary.withOpacity(0.16),
 
             surfaceTintColor: Colors.transparent,
 
-            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+            labelBehavior:
+                NavigationDestinationLabelBehavior
+                    .alwaysShow,
 
             onDestinationSelected: (index) {
               setState(() {
@@ -151,17 +167,23 @@ class _BeneficiaryHomePageState extends State<BeneficiaryHomePage> {
                   '/beneficiaryHome',
                   arguments: widget.userId,
                 );
-              } else if (index == 1) {
-                Navigator.pushReplacementNamed(
-                  context,
-                  '/orders',
-                  arguments: widget.userId,
-                );
-              } else if (index == 2) {
+              }else if (index == 1) {
+  Navigator.pushReplacement(
+    context,
+    MaterialPageRoute(
+      builder: (_) => BeneficiaryOrdersPage(
+        userId: widget.userId,
+      ),
+    ),
+  );
+} else if (index == 2) {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => BeneficiaryMorePage(userId: widget.userId),
+                    builder: (_) =>
+                        BeneficiaryMorePage(
+                      userId: widget.userId,
+                    ),
                   ),
                 );
               }
@@ -170,28 +192,36 @@ class _BeneficiaryHomePageState extends State<BeneficiaryHomePage> {
             destinations: const [
               NavigationDestination(
                 icon: Icon(Icons.home_outlined),
-                selectedIcon: Icon(Icons.home_rounded),
+                selectedIcon:
+                    Icon(Icons.home_rounded),
                 label: 'الرئيسية',
               ),
 
               NavigationDestination(
-                icon: Icon(Icons.volunteer_activism_outlined),
-                selectedIcon: Icon(Icons.volunteer_activism_rounded),
+                icon: Icon(
+                  Icons.volunteer_activism_outlined,
+                ),
+                selectedIcon: Icon(
+                  Icons.volunteer_activism_rounded,
+                ),
                 label: 'طلباتي',
               ),
 
               NavigationDestination(
                 icon: Icon(Icons.more_horiz),
-                selectedIcon: Icon(Icons.more_horiz),
+                selectedIcon:
+                    Icon(Icons.more_horiz),
                 label: 'المزيد',
               ),
             ],
           ),
         ),
-      ),
+      )
+      ,
       body: SafeArea(
         child: Column(
           children: [
+
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               child: Row(
@@ -205,9 +235,22 @@ class _BeneficiaryHomePageState extends State<BeneficiaryHomePage> {
                         .snapshots(),
                     builder: (context, cartSnapshot) {
                       if (!cartSnapshot.hasData) {
-                        return Icon(
-                          Icons.shopping_cart_outlined,
-                          color: Colors.grey.shade700,
+                        return IconButton(
+                          icon: Icon(
+                            Icons.shopping_cart_outlined,
+                            color: Colors.grey.shade700,
+                            size: 28,
+                          ),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => BeneficiaryCartPage(
+                                  userId: widget.userId,
+                                ),
+                              ),
+                            );
+                          },
                         );
                       }
 
@@ -218,82 +261,93 @@ class _BeneficiaryHomePageState extends State<BeneficiaryHomePage> {
                         builder: (context, countSnapshot) {
                           final count = countSnapshot.data ?? 0;
 
-                          return Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              Icon(
-                                Icons.shopping_cart_outlined,
-                                color: Colors.grey.shade700,
-                                size: 28,
-                              ),
-
-                              if (count > 0)
-                                Positioned(
-                                  top: -6,
-                                  right: -4,
-                                  child: Container(
-                                    padding: const EdgeInsets.all(5),
-                                    decoration: const BoxDecoration(
-                                      color: AppDesign.primary,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Text(
-                                      count.toString(),
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
+                          return IconButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => BeneficiaryCartPage(
+                                    userId: widget.userId,
+                                  ),
+                                ),
+                              );
+                            },
+                            icon: Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                Icon(
+                                  Icons.shopping_cart_outlined,
+                                  color: Colors.grey.shade700,
+                                  size: 28,
+                                ),
+                                if (count > 0)
+                                  Positioned(
+                                    top: -6,
+                                    right: -4,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(5),
+                                      decoration: const BoxDecoration(
+                                        color: AppDesign.primary,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Text(
+                                        count.toString(),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                            ],
+                              ],
+                            ),
                           );
                         },
                       );
                     },
                   ),
-                  Row(
-                    textDirection: TextDirection.rtl,
-                    children: [
-                      CircleAvatar(
-                        radius: 24,
-                        backgroundColor: AppDesign.primary,
-                        child: Text(
-                          firstName.isNotEmpty ? firstName[0] : 'م',
-                          style: const TextStyle(
-                            color: AppDesign.white,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 20,
-                          ),
-                        ),
-                      ),
-
-                      AppGap.wMD,
-
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            'مرحبًا',
-                            style: AppDesign.bodyStyle.copyWith(
-                              color: AppDesign.primary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            "$firstName $lastName",
-                            style: AppDesign.h1Style.copyWith(
-                              color: AppDesign.primary,
-                              fontSize: 24,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+            Row(
+              textDirection: TextDirection.rtl,
+              children: [
+                CircleAvatar(
+                  radius: 24,
+                  backgroundColor: AppDesign.primary,
+                  child: Text(
+                    firstName.isNotEmpty ? firstName[0] : 'م',
+                    style: const TextStyle(
+                      color: AppDesign.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 20,
+                    ),
                   ),
+                ),
+
+                AppGap.wMD,
+
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'مرحبًا',
+                      style: AppDesign.bodyStyle.copyWith(
+                        color: AppDesign.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      "$firstName $lastName",
+                      style: AppDesign.h1Style.copyWith(
+                        color: AppDesign.primary,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
                 ],
               ),
             ),
@@ -320,10 +374,9 @@ class _BeneficiaryHomePageState extends State<BeneficiaryHomePage> {
                       Text(
                         "مع مَدَد يمكنك الحصول على التبرعات المناسبة ",
                         style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold),
                       ),
                       SizedBox(height: 8),
                       Text(
@@ -358,90 +411,90 @@ class _BeneficiaryHomePageState extends State<BeneficiaryHomePage> {
 
             const SizedBox(height: 10),
 
-            Expanded(
-              child: isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : filtered.isEmpty
-                  ? const Center(child: Text("لا توجد تبرعات"))
-                  : Directionality(
-                      textDirection: TextDirection.rtl,
-                      child: GridView.builder(
-                        padding: const EdgeInsets.all(10),
-                        itemCount: filtered.length,
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              childAspectRatio: 0.75,
-                            ),
-                        itemBuilder: (context, index) {
-                          final box = filtered[index];
+          Expanded(
+  child: isLoading
+      ? const Center(child: CircularProgressIndicator())
+      : filtered.isEmpty
+          ? const Center(child: Text("لا توجد تبرعات"))
+          : Directionality(
+              textDirection: TextDirection.rtl, 
+              child: GridView.builder(
+                padding: const EdgeInsets.all(10),
+                itemCount: filtered.length,
+                gridDelegate:
+                    const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  childAspectRatio: 0.75,
+                ),
+                itemBuilder: (context, index) {
+                  final box = filtered[index];
 
-                          return Align(
-                            alignment: Alignment.topRight,
-                            child: ClothesBoxCard(
-                              images: box["images"],
-                              gender: box["gender"],
-                              age: box["age"],
-                              userId: widget.userId,
-                              boxId: box["boxId"],
-                            ),
-                          );
-                        },
-                      ),
+                  return Align(
+                    alignment: Alignment.topRight, 
+                    child: ClothesBoxCard(
+                      images: box["images"],
+                      gender: box["gender"],
+                      age: box["age"],
+                      userId: widget.userId,
+                      boxId: box["boxId"],
                     ),
+                  );
+                },
+              ),
             ),
+)
           ],
         ),
       ),
     );
   }
 
-  Widget _buildFilters() {
-    List<String> genders = ["الكل", "ذكر", "أنثى"];
-    List<String> ages = [
-      "الكل",
-      "رضّع (0-2)",
-      "أطفال صغار (3-5)",
-      "أطفال (6-9)",
-      "أطفال (10-15)",
-      "بالغون",
-    ];
+ Widget _buildFilters() {
+  List<String> genders = ["الكل", "ذكر", "أنثى"];
+  List<String> ages = [
+    "الكل",
+    "رضّع (0-2)",
+    "أطفال صغار (3-5)",
+    "أطفال (6-9)",
+    "أطفال (10-15)",
+    "بالغون",
+  ];
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: _filterCard(
-              title: "التصنيف",
-              value: selectedGender,
-              icon: Icons.person,
-              items: genders,
-              onSelected: (value) {
-                setState(() => selectedGender = value);
-              },
-            ),
+  return Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 10),
+    child: Row(
+      children: [
+
+        Expanded(
+          child: _filterCard(
+            title: "التصنيف",
+            value: selectedGender,
+            icon: Icons.person,
+            items: genders,
+            onSelected: (value) {
+              setState(() => selectedGender = value);
+            },
           ),
+        ),
 
-          const SizedBox(width: 10),
+        const SizedBox(width: 10),
 
-          Expanded(
-            child: _filterCard(
-              title: "الفئة العمرية",
-              value: selectedAge,
-              icon: Icons.cake,
-              items: ages,
-              onSelected: (value) {
-                setState(() => selectedAge = value);
-              },
-            ),
+        Expanded(
+          child: _filterCard(
+            title: "الفئة العمرية",
+            value: selectedAge,
+            icon: Icons.cake,
+            items: ages,
+            onSelected: (value) {
+              setState(() => selectedAge = value);
+            },
           ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
 }
-
+}
 Widget _filterCard({
   required String title,
   required String value,
@@ -460,13 +513,17 @@ Widget _filterCard({
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+          )
         ],
       ),
 
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
+
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
@@ -499,7 +556,6 @@ Widget _filterCard({
     ),
   );
 }
-
 Future<int> _countAvailableCartItems(
   List<QueryDocumentSnapshot> cartDocs,
 ) async {
@@ -528,8 +584,7 @@ Future<int> _countAvailableCartItems(
 
   return count;
 }
-
-class ClothesBoxCard extends StatelessWidget {
+  class ClothesBoxCard extends StatelessWidget {
   final List images;
   final String gender;
   final String age;
@@ -549,6 +604,7 @@ class ClothesBoxCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Stack(
       children: [
+
         Container(
           margin: const EdgeInsets.all(6),
           decoration: BoxDecoration(
@@ -557,15 +613,29 @@ class ClothesBoxCard extends StatelessWidget {
           ),
           child: Column(
             children: [
+
               Expanded(
                 child: PageView.builder(
                   itemCount: images.length,
                   itemBuilder: (context, i) {
                     return Image.network(
-                      images[i],
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                    );
+  images[i],
+  fit: BoxFit.cover,
+  width: double.infinity,
+
+  errorBuilder: (context, error, stackTrace) {
+    print("IMAGE ERROR: $error");
+
+    return const Center(
+      child: Icon(
+        Icons.broken_image,
+        size: 40,
+        color: Colors.grey,
+      ),
+    );
+  },
+
+);
                   },
                 ),
               ),
@@ -574,6 +644,7 @@ class ClothesBoxCard extends StatelessWidget {
                 padding: const EdgeInsets.all(8),
                 child: Column(
                   children: [
+
                     Text(age),
 
                     const SizedBox(height: 6),
@@ -588,17 +659,17 @@ class ClothesBoxCard extends StatelessWidget {
                           context,
                           MaterialPageRoute(
                             builder: (_) => BeneficiaryViewDonationPage(
-                              boxId: boxId,
+                              boxId: boxId, 
                               userId: userId,
                             ),
                           ),
                         );
                       },
                       child: const Text("عرض التفاصيل "),
-                    ),
+                    )
                   ],
                 ),
-              ),
+              )
             ],
           ),
         ),
@@ -612,11 +683,16 @@ class ClothesBoxCard extends StatelessWidget {
               color: Colors.white.withOpacity(0.9),
               borderRadius: BorderRadius.circular(14),
               boxShadow: const [
-                BoxShadow(color: Colors.black12, blurRadius: 4),
+                BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 4,
+                )
               ],
             ),
             child: Icon(
-              gender == "أنثى" ? Icons.woman_2 : Icons.man,
+              gender == "أنثى"
+                  ? Icons.woman_2
+                  : Icons.man,
               size: 22,
               color: Colors.grey,
             ),
