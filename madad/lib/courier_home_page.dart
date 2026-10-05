@@ -33,10 +33,17 @@ class _CourierHomePageState extends State<CourierHomePage> {
           .doc(widget.userId)
           .get();
 
-      final tasksSnapshot = await FirebaseFirestore.instance
+      // حساب المهام المكتملة للتبرعات وطلبات المستفيدين للمندوب الحالي
+      final donationsSnapshot = await FirebaseFirestore.instance
           .collection('donations')
           .where('courierID', isEqualTo: widget.userId)
           .where('status', whereIn: ['delivered', 'available'])
+          .get();
+
+      final requestsSnapshot = await FirebaseFirestore.instance
+          .collection('requests')
+          .where('courierID', isEqualTo: widget.userId)
+          .where('status', isEqualTo: 'completed')
           .get();
 
       if (!mounted) return;
@@ -54,7 +61,8 @@ class _CourierHomePageState extends State<CourierHomePage> {
 
       setState(() {
         courierName = fetchedName;
-        completedTasksCount = tasksSnapshot.docs.length;
+        completedTasksCount =
+            donationsSnapshot.docs.length + requestsSnapshot.docs.length;
         isLoading = false;
       });
     } catch (e) {
@@ -79,7 +87,7 @@ class _CourierHomePageState extends State<CourierHomePage> {
     }
   }
 
-  Future _completeTask(String donationId, String originalStatus) async {
+  Future _completeDonationTask(String donationId, String originalStatus) async {
     final confirm = await AppDesign.showAppDialog(
       context: context,
       title: 'إتمام التوصيل',
@@ -90,20 +98,80 @@ class _CourierHomePageState extends State<CourierHomePage> {
     if (confirm != true) return;
 
     try {
-      final targetStatus = originalStatus == 'published'
+      final batch = FirebaseFirestore.instance.batch();
+
+      final boxesSnapshot = await FirebaseFirestore.instance
+          .collection('donation_boxes')
+          .where('donationId', isEqualTo: donationId)
+          .get();
+
+      for (var boxDoc in boxesSnapshot.docs) {
+        batch.update(boxDoc.reference, {'status': 'delivered'});
+      }
+
+      final targetDonationStatus = (originalStatus == 'published')
           ? 'available'
           : 'delivered';
 
-      await FirebaseFirestore.instance
+      final donationRef = FirebaseFirestore.instance
           .collection('donations')
-          .doc(donationId)
-          .update({
-            'status': targetStatus,
-            'deliveredAt': FieldValue.serverTimestamp(),
-          });
+          .doc(donationId);
+      batch.update(donationRef, {
+        'status': targetDonationStatus,
+        'courierTaskStatus': 'completed',
+        'deliveredAt': FieldValue.serverTimestamp(),
+      });
+
+      await batch.commit();
 
       if (!mounted) return;
       AppDesign.showSuccessSnackBar(context, 'تم تسجيل التسليم بنجاح');
+      _loadCourierData();
+    } catch (e) {
+      if (!mounted) return;
+      AppDesign.showErrorSnackBar(context, 'حدث خطأ أثناء تحديث الحالة: $e');
+    }
+  }
+
+  Future _completeRequestTask(String requestId) async {
+    final confirm = await AppDesign.showAppDialog(
+      context: context,
+      title: 'إتمام التوصيل للمستفيد',
+      message: 'هل أنت متأكد من تسليم الطلب بنجاح؟',
+      confirmText: 'تأكيد التسليم',
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final batch = FirebaseFirestore.instance.batch();
+
+      final boxesSnapshot = await FirebaseFirestore.instance
+          .collection('donation_boxes')
+          .where('requestId', isEqualTo: requestId)
+          .get();
+
+      for (var boxDoc in boxesSnapshot.docs) {
+        batch.update(boxDoc.reference, {'status': 'completed'});
+      }
+
+      final requestRef = FirebaseFirestore.instance
+          .collection('requests')
+          .doc(requestId);
+      batch.update(requestRef, {
+        'status': 'completed',
+        'courierTaskStatus': 'completed',
+        'deliveredAt': FieldValue.serverTimestamp(),
+      });
+
+      await batch.commit();
+
+      if (!mounted) return;
+      AppDesign.showSuccessSnackBar(
+        context,
+        'تم إتمام توصيل طلب المستفيد بنجاح',
+      );
+      _loadCourierData();
     } catch (e) {
       if (!mounted) return;
       AppDesign.showErrorSnackBar(context, 'حدث خطأ أثناء تحديث الحالة: $e');
@@ -307,313 +375,547 @@ class _CourierHomePageState extends State<CourierHomePage> {
                 ),
               ),
               const SizedBox(height: 12),
+
+              // عرض التبرعات وطلبات المستفيدين النشطة المسندة للمندوب
               StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
                     .collection('donations')
                     .where('courierID', isEqualTo: widget.userId)
                     .snapshots(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
+                builder: (context, donationsSnap) {
+                  return StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('requests')
+                        .where('courierID', isEqualTo: widget.userId)
+                        .snapshots(),
+                    builder: (context, requestsSnap) {
+                      if (donationsSnap.connectionState ==
+                              ConnectionState.waiting ||
+                          requestsSnap.connectionState ==
+                              ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
 
-                  final allDocs = snapshot.data?.docs ?? [];
-                  final docs = allDocs.where((doc) {
-                    final data = doc.data() as Map;
-                    final status = data['status'] ?? '';
-                    return status != 'delivered' && status != 'available';
-                  }).toList();
+                      final donationDocs = donationsSnap.data?.docs ?? [];
+                      final requestDocs = requestsSnap.data?.docs ?? [];
 
-                  if (docs.isEmpty) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 20),
-                      child: Center(
-                        child: Text(
-                          'لا توجد طلبات نشطة حالياً',
-                          style: AppDesign.bodySecondaryStyle,
-                        ),
-                      ),
-                    );
-                  }
+                      // تصفية التبرعات النشطة (غير المكتملة)
+                      final activeDonations = donationDocs.where((doc) {
+                        final data = doc.data() as Map;
+                        final status = data['status'] ?? '';
+                        return status != 'delivered' && status != 'available';
+                      }).toList();
 
-                  return ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: docs.length,
-                    itemBuilder: (context, index) {
-                      final doc = docs[index];
-                      final data = doc.data() as Map<String, dynamic>;
-                      final rawCity = (data['city'] ?? '').toString().trim();
-                      final rawDistrict = (data['district'] ?? '')
-                          .toString()
-                          .trim();
+                      // تصفية طلبات المستفيدين النشطة (غير المكتملة)
+                      final activeRequests = requestDocs.where((doc) {
+                        final data = doc.data() as Map;
+                        final status = data['status'] ?? '';
+                        return status != 'completed';
+                      }).toList();
 
-                      final city = rawCity.isNotEmpty ? rawCity : 'لا يوجد';
-                      final district = rawDistrict.isNotEmpty
-                          ? rawDistrict
-                          : 'لا يوجد';
+                      if (activeDonations.isEmpty && activeRequests.isEmpty) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 20),
+                          child: Center(
+                            child: Text(
+                              'لا توجد طلبات نشطة حالياً',
+                              style: AppDesign.bodySecondaryStyle,
+                            ),
+                          ),
+                        );
+                      }
 
-                      final donorId = data['donorID'] ?? '';
+                      return Column(
+                        children: [
+                          // 1. عرض التبرعات النشطة
+                          ...activeDonations.map((doc) {
+                            final data = doc.data() as Map<String, dynamic>;
+                            final rawCity = (data['city'] ?? '')
+                                .toString()
+                                .trim();
+                            final rawDistrict = (data['district'] ?? '')
+                                .toString()
+                                .trim();
+                            final city = rawCity.isNotEmpty
+                                ? rawCity
+                                : 'لا يوجد';
+                            final district = rawDistrict.isNotEmpty
+                                ? rawDistrict
+                                : 'لا يوجد';
+                            final donorId = data['donorID'] ?? '';
+                            final originalStatus =
+                                data['originalStatus'] ?? 'published';
 
-                      final originalStatus =
-                          data['originalStatus'] ?? 'published';
-                      final String pickupLocation = originalStatus == 'reserved'
-                          ? 'المستودع'
-                          : '$city - $district';
-                      final String deliveryLocation =
-                          originalStatus == 'reserved'
-                          ? '$city - $district'
-                          : 'المستودع';
+                            final String pickupLocation =
+                                originalStatus == 'reserved'
+                                ? 'المستودع'
+                                : '$city - $district';
+                            final String deliveryLocation =
+                                originalStatus == 'reserved'
+                                ? '$city - $district'
+                                : 'المستودع';
 
-                      return FutureBuilder<DocumentSnapshot>(
-                        future: donorId.isNotEmpty
-                            ? FirebaseFirestore.instance
-                                  .collection('Users')
-                                  .doc(donorId)
-                                  .get()
-                            : Future.value(null),
-                        builder: (context, userSnap) {
-                          String name = 'صاحب الطلب';
-                          String phone = '';
+                            return FutureBuilder<DocumentSnapshot>(
+                              future: donorId.isNotEmpty
+                                  ? FirebaseFirestore.instance
+                                        .collection('Users')
+                                        .doc(donorId)
+                                        .get()
+                                  : Future.value(null),
+                              builder: (context, userSnap) {
+                                String name = 'صاحب الطلب';
+                                String phone = '';
 
-                          if (userSnap.hasData &&
-                              userSnap.data != null &&
-                              userSnap.data!.exists) {
-                            final uData =
-                                userSnap.data!.data()
-                                    as Map<String, dynamic>? ??
-                                {};
-                            name =
-                                '${uData['firstName'] ?? ''} ${uData['lastName'] ?? ''}'
-                                    .trim();
-                            phone =
-                                (uData['phone'] ?? uData['phoneNumber'] ?? '')
-                                    .toString();
-                          }
+                                if (userSnap.hasData &&
+                                    userSnap.data != null &&
+                                    userSnap.data!.exists) {
+                                  final uData =
+                                      userSnap.data!.data()
+                                          as Map<String, dynamic>? ??
+                                      {};
+                                  name =
+                                      '${uData['firstName'] ?? ''} ${uData['lastName'] ?? ''}'
+                                          .trim();
+                                  phone =
+                                      (uData['phone'] ??
+                                              uData['phoneNumber'] ??
+                                              '')
+                                          .toString();
+                                }
 
-                          return FutureBuilder<QuerySnapshot>(
-                            future: FirebaseFirestore.instance
-                                .collection('donation_boxes')
-                                .where('donationId', isEqualTo: doc.id)
-                                .get(),
-                            builder: (context, boxesSnap) {
-                              final boxesDocs = boxesSnap.data?.docs ?? [];
-                              final int boxesCount = boxesDocs.length;
+                                return FutureBuilder<QuerySnapshot>(
+                                  future: FirebaseFirestore.instance
+                                      .collection('donation_boxes')
+                                      .where('donationId', isEqualTo: doc.id)
+                                      .get(),
+                                  builder: (context, boxesSnap) {
+                                    final boxesDocs =
+                                        boxesSnap.data?.docs ?? [];
+                                    final int boxesCount = boxesDocs.length;
 
-                              List<String> boxCodes = boxesDocs
-                                  .map(
-                                    (b) =>
-                                        (b.data()
-                                                as Map<
-                                                  String,
-                                                  dynamic
-                                                >)['boxCode']
-                                            ?.toString() ??
-                                        'صندوق',
-                                  )
-                                  .toList();
-                              if (boxCodes.isEmpty) {
-                                boxCodes = ['لا توجد صناديق مضافة'];
-                              }
+                                    List<String> boxCodes = boxesDocs
+                                        .map(
+                                          (b) =>
+                                              (b.data()
+                                                      as Map<
+                                                        String,
+                                                        dynamic
+                                                      >)['boxCode']
+                                                  ?.toString() ??
+                                              'صندوق',
+                                        )
+                                        .toList();
+                                    if (boxCodes.isEmpty)
+                                      boxCodes = ['لا توجد صناديق مضافة'];
 
-                              String selectedBox = boxCodes.first;
-
-                              return Container(
-                                margin: const EdgeInsets.only(bottom: 16),
-                                padding: const EdgeInsets.all(16),
-                                decoration: AppDesign.primaryCardDecoration,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          'طلب #${doc.id.substring(0, 5).toUpperCase()}',
-                                          style: AppDesign.subtitleStyle
-                                              .copyWith(
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                        ),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 10,
-                                            vertical: 4,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: AppDesign.warning
-                                                .withOpacity(0.2),
-                                            borderRadius: BorderRadius.circular(
-                                              10,
-                                            ),
-                                          ),
-                                          child: const Text(
-                                            'قيد التوصيل',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 10),
-                                    Text(
-                                      'موقع الاستلام: $pickupLocation',
-                                      style: AppDesign.bodySecondaryStyle,
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'موقع التسليم: $deliveryLocation',
-                                      style: AppDesign.bodySecondaryStyle,
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      'صاحب الطلب: $name',
-                                      style: AppDesign.bodyStyle.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          'الجوال: ${phone.isNotEmpty ? phone : 'غير متوفر'}',
-                                          style: AppDesign.bodySecondaryStyle,
-                                        ),
-                                        if (phone.isNotEmpty)
-                                          InkWell(
-                                            onTap: () => _launchWhatsApp(phone),
-                                            borderRadius: BorderRadius.circular(
-                                              20,
-                                            ),
-                                            child: Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 10,
-                                                    vertical: 6,
-                                                  ),
-                                              decoration: BoxDecoration(
-                                                color: Colors.green.withOpacity(
-                                                  0.15,
-                                                ),
-                                                borderRadius:
-                                                    BorderRadius.circular(20),
-                                              ),
-                                              child: const Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(
-                                                    Icons.chat,
-                                                    color: Colors.green,
-                                                    size: 18,
-                                                  ),
-                                                  SizedBox(width: 6),
-                                                  Text(
-                                                    'واتساب',
-                                                    style: TextStyle(
-                                                      color: Colors.green,
-                                                      fontSize: 12,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          'عدد الصناديق: $boxesCount',
-                                          style: AppDesign.bodyStyle.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                            color: AppDesign.primary,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Container(
-                                      width: double.infinity,
-                                      padding: const EdgeInsets.all(10),
-                                      decoration: BoxDecoration(
-                                        color: AppDesign.background,
-                                        borderRadius: BorderRadius.circular(14),
-                                        border: Border.all(
-                                          color: AppDesign.border,
-                                        ),
-                                      ),
+                                    return Container(
+                                      margin: const EdgeInsets.only(bottom: 16),
+                                      padding: const EdgeInsets.all(16),
+                                      decoration:
+                                          AppDesign.primaryCardDecoration,
                                       child: Column(
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-                                          Text(
-                                            'الصناديق المرتبطة بالطلب:',
-                                            style: AppDesign.bodySecondaryStyle
-                                                .copyWith(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 12,
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                'طلب تبرع',
+                                                style: AppDesign.subtitleStyle
+                                                    .copyWith(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                              ),
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 10,
+                                                      vertical: 4,
+                                                    ),
+                                                decoration: BoxDecoration(
+                                                  color: AppDesign.warning
+                                                      .withOpacity(0.2),
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
                                                 ),
+                                                child: const Text(
+                                                  'قيد التوصيل للمستودع',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 10),
+                                          Text(
+                                            'موقع الاستلام: $pickupLocation',
+                                            style: AppDesign.bodySecondaryStyle,
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'موقع التسليم: $deliveryLocation',
+                                            style: AppDesign.bodySecondaryStyle,
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            'صاحب الطلب: $name',
+                                            style: AppDesign.bodyStyle.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                            ),
                                           ),
                                           const SizedBox(height: 6),
-                                          ...boxCodes.map(
-                                            (code) => Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    vertical: 3,
-                                                  ),
-                                              child: Row(
-                                                children: [
-                                                  const Icon(
-                                                    Icons.inventory_2_outlined,
-                                                    size: 16,
-                                                    color: AppDesign.primary,
-                                                  ),
-                                                  const SizedBox(width: 8),
-                                                  Text(
-                                                    'رمز الصندوق: $code',
-                                                    style: const TextStyle(
-                                                      fontSize: 14,
-                                                      fontWeight:
-                                                          FontWeight.w500,
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                'الجوال: ${phone.isNotEmpty ? phone : 'غير متوفر'}',
+                                                style: AppDesign
+                                                    .bodySecondaryStyle,
+                                              ),
+                                              if (phone.isNotEmpty)
+                                                InkWell(
+                                                  onTap: () =>
+                                                      _launchWhatsApp(phone),
+                                                  borderRadius:
+                                                      BorderRadius.circular(20),
+                                                  child: Container(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 10,
+                                                          vertical: 6,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.green
+                                                          .withOpacity(0.15),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            20,
+                                                          ),
+                                                    ),
+                                                    child: const Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        Icon(
+                                                          Icons.chat,
+                                                          color: Colors.green,
+                                                          size: 18,
+                                                        ),
+                                                        SizedBox(width: 6),
+                                                        Text(
+                                                          'واتساب',
+                                                          style: TextStyle(
+                                                            color: Colors.green,
+                                                            fontSize: 12,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                          ),
+                                                        ),
+                                                      ],
                                                     ),
                                                   ),
-                                                ],
+                                                ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 12),
+                                          Text(
+                                            'عدد الصناديق: $boxesCount',
+                                            style: AppDesign.bodyStyle.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                              color: AppDesign.primary,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Container(
+                                            width: double.infinity,
+                                            padding: const EdgeInsets.all(10),
+                                            decoration: BoxDecoration(
+                                              color: AppDesign.background,
+                                              borderRadius:
+                                                  BorderRadius.circular(14),
+                                              border: Border.all(
+                                                color: AppDesign.border,
                                               ),
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  'الصناديق المرتبطة بالطلب:',
+                                                  style: AppDesign
+                                                      .bodySecondaryStyle
+                                                      .copyWith(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 12,
+                                                      ),
+                                                ),
+                                                const SizedBox(height: 6),
+                                                ...boxCodes.map(
+                                                  (code) => Padding(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          vertical: 3,
+                                                        ),
+                                                    child: Row(
+                                                      children: [
+                                                        const Icon(
+                                                          Icons
+                                                              .inventory_2_outlined,
+                                                          size: 16,
+                                                          color:
+                                                              AppDesign.primary,
+                                                        ),
+                                                        const SizedBox(
+                                                          width: 8,
+                                                        ),
+                                                        Text(
+                                                          'رمز الصندوق: $code',
+                                                          style:
+                                                              const TextStyle(
+                                                                fontSize: 14,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w500,
+                                                              ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(height: 14),
+                                          SizedBox(
+                                            width: double.infinity,
+                                            child: ElevatedButton(
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor:
+                                                    AppDesign.success,
+                                              ),
+                                              onPressed: () =>
+                                                  _completeDonationTask(
+                                                    doc.id,
+                                                    originalStatus,
+                                                  ),
+                                              child: const Text('تم التسليم'),
                                             ),
                                           ),
                                         ],
                                       ),
-                                    ),
-                                    const SizedBox(height: 14),
-                                    SizedBox(
-                                      width: double.infinity,
-                                      child: ElevatedButton(
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: AppDesign.success,
-                                        ),
-                                        onPressed: () => _completeTask(
-                                          doc.id,
-                                          originalStatus,
-                                        ),
-                                        child: const Text('تم التسليم'),
+                                    );
+                                  },
+                                );
+                              },
+                            );
+                          }),
+
+                          // 2. عرض طلبات المستفيدين النشطة
+                          ...activeRequests.map((doc) {
+                            final data = doc.data() as Map<String, dynamic>;
+                            final beneficiaryId =
+                                data['beneficiaryId'] ??
+                                data['beneficiaryID'] ??
+                                '';
+                            final addressMap = data['deliveryAddress'];
+                            final warehouseName = addressMap is Map
+                                ? (addressMap['warehouseName'] ?? 'المستودع')
+                                      .toString()
+                                : 'المستودع';
+
+                            return FutureBuilder<DocumentSnapshot>(
+                              future:
+                                  beneficiaryId.isNotEmpty &&
+                                      beneficiaryId != '-'
+                                  ? FirebaseFirestore.instance
+                                        .collection('Users')
+                                        .doc(beneficiaryId)
+                                        .get()
+                                  : Future.value(null),
+                              builder: (context, userSnap) {
+                                String name = 'المستفيد';
+                                String phone = '';
+
+                                if (userSnap.hasData &&
+                                    userSnap.data != null &&
+                                    userSnap.data!.exists) {
+                                  final uData =
+                                      userSnap.data!.data()
+                                          as Map<String, dynamic>? ??
+                                      {};
+                                  name =
+                                      '${uData['firstName'] ?? ''} ${uData['lastName'] ?? ''}'
+                                          .trim();
+                                  phone =
+                                      (uData['phone'] ??
+                                              uData['phoneNumber'] ??
+                                              '')
+                                          .toString();
+                                }
+
+                                return FutureBuilder<QuerySnapshot>(
+                                  future: FirebaseFirestore.instance
+                                      .collection('donation_boxes')
+                                      .where('requestId', isEqualTo: doc.id)
+                                      .get(),
+                                  builder: (context, boxesSnap) {
+                                    final boxesDocs =
+                                        boxesSnap.data?.docs ?? [];
+                                    final int boxesCount = boxesDocs.length;
+
+                                    return Container(
+                                      margin: const EdgeInsets.only(bottom: 16),
+                                      padding: const EdgeInsets.all(16),
+                                      decoration:
+                                          AppDesign.primaryCardDecoration,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                'طلب مستفيد',
+                                                style: AppDesign.subtitleStyle
+                                                    .copyWith(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                              ),
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 10,
+                                                      vertical: 4,
+                                                    ),
+                                                decoration: BoxDecoration(
+                                                  color: AppDesign.warning
+                                                      .withOpacity(0.2),
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
+                                                ),
+                                                child: const Text(
+                                                  'قيد التوصيل للمستفيد',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 10),
+                                          Text(
+                                            'موقع الاستلام: $warehouseName',
+                                            style: AppDesign.bodySecondaryStyle,
+                                          ),
+                                          const SizedBox(height: 4),
+                                          const Text(
+                                            'موقع التسليم: عنوان المستفيد',
+                                            style: AppDesign.bodySecondaryStyle,
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            'المستفيد: $name',
+                                            style: AppDesign.bodyStyle.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                'الجوال: ${phone.isNotEmpty ? phone : 'غير متوفر'}',
+                                                style: AppDesign
+                                                    .bodySecondaryStyle,
+                                              ),
+                                              if (phone.isNotEmpty)
+                                                InkWell(
+                                                  onTap: () =>
+                                                      _launchWhatsApp(phone),
+                                                  borderRadius:
+                                                      BorderRadius.circular(20),
+                                                  child: Container(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 10,
+                                                          vertical: 6,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.green
+                                                          .withOpacity(0.15),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            20,
+                                                          ),
+                                                    ),
+                                                    child: const Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        Icon(
+                                                          Icons.chat,
+                                                          color: Colors.green,
+                                                          size: 18,
+                                                        ),
+                                                        SizedBox(width: 6),
+                                                        Text(
+                                                          'واتساب',
+                                                          style: TextStyle(
+                                                            color: Colors.green,
+                                                            fontSize: 12,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 12),
+                                          Text(
+                                            'عدد الصناديق: $boxesCount',
+                                            style: AppDesign.bodyStyle.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                              color: AppDesign.primary,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 14),
+                                          SizedBox(
+                                            width: double.infinity,
+                                            child: ElevatedButton(
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor:
+                                                    AppDesign.success,
+                                              ),
+                                              onPressed: () =>
+                                                  _completeRequestTask(doc.id),
+                                              child: const Text('تم التسليم'),
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          );
-                        },
+                                    );
+                                  },
+                                );
+                              },
+                            );
+                          }),
+                        ],
                       );
                     },
                   );
