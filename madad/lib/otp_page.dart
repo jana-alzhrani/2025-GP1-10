@@ -110,6 +110,7 @@ class _OtpPageState extends State<OtpPage> {
         setState(() {
           canResend = true;
         });
+
         timer.cancel();
       }
     });
@@ -250,6 +251,7 @@ class _OtpPageState extends State<OtpPage> {
               'رقم الجوال غير مرتبط بحساب مسجل',
             );
           }
+
           return;
         }
 
@@ -316,6 +318,7 @@ class _OtpPageState extends State<OtpPage> {
           if (mounted) {
             AppDesign.showErrorSnackBar(context, 'نوع الحساب غير معروف');
           }
+
           return;
         }
 
@@ -341,6 +344,9 @@ class _OtpPageState extends State<OtpPage> {
           uploadedPdfUrl = await storageRef.getDownloadURL();
         }
 
+        // =====================================================
+        // بيانات المستخدم الأساسية فقط
+        // =====================================================
         final userData = <String, dynamic>{
           'userId': uid,
           'firstName': widget.firstName.trim(),
@@ -352,16 +358,29 @@ class _OtpPageState extends State<OtpPage> {
           'createdAt': FieldValue.serverTimestamp(),
         };
 
+        // بيانات خاصة بالمستفيد داخل Users فقط
+        // بدون رقم الضمان وبدون رابط ملف الضمان
         if (role == 'beneficiary') {
-          userData.addAll({
-            'socialSecurityNumber': widget.socialSecurityNumber ?? '',
-            'socialSecurityPdfUrl': uploadedPdfUrl ?? '',
-            'status': 'pending',
-            'isVerified': false,
-          });
+          userData.addAll({'status': 'pending', 'isVerified': false});
         }
 
+        // إنشاء المستخدم داخل Users
         await userRef.set(userData);
+
+        // =====================================================
+        // إنشاء بيانات المستفيد في Collection beneficiaries
+        // =====================================================
+        if (role == 'beneficiary') {
+          final beneficiaryRef = FirebaseFirestore.instance
+              .collection('beneficiaries')
+              .doc();
+
+          await beneficiaryRef.set({
+            'userID': uid,
+            'socialSecurityNumber': widget.socialSecurityNumber ?? '',
+            'socialSecurityPdfUrl': uploadedPdfUrl ?? '',
+          });
+        }
 
         if (!mounted) return;
 
