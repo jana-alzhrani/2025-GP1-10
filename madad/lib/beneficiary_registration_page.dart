@@ -118,7 +118,7 @@ class _BeneficiaryRegistrationPageState
     }
 
     final result = await FirebaseFirestore.instance
-        .collection('Users')
+        .collection('beneficiaries')
         .where('socialSecurityNumber', isEqualTo: number)
         .limit(1)
         .get();
