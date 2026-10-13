@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -297,9 +298,13 @@ class _ViewDonationPageState extends State<ViewDonationPage>
     );
   }
 
-  String generateBoxCode(String boxId, int boxNumber) {
-    final shortId = boxId.substring(0, 5).toUpperCase();
-    return "BOX$boxNumber-$shortId";
+  String generateBoxCode(int boxNumber) {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    final random = Random();
+    return List.generate(
+      10,
+      (index) => chars[random.nextInt(chars.length)],
+      ).join();
   }
 
   Future<void> _deleteDonation(String docId) async {
