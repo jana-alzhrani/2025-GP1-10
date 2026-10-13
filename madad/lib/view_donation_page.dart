@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:pdf/pdf.dart';
 import 'app_design.dart';
 import 'edit_donation_page.dart';
@@ -13,7 +14,10 @@ import 'package:printing/printing.dart';
 class ViewDonationPage extends StatefulWidget {
   final String userId;
 
-  const ViewDonationPage({super.key, required this.userId});
+  const ViewDonationPage({
+    super.key,
+    required this.userId,
+  });
 
   @override
   State<ViewDonationPage> createState() => _ViewDonationPageState();
@@ -111,7 +115,7 @@ class _ViewDonationPageState extends State<ViewDonationPage>
       case 'available':
         return 'متاح';
       case 'reserved':
-        return 'تم الطلب'; // ✅ التعديل هنا
+        return 'تم الطلب';
       case 'delivered':
         return 'تم التسليم';
       default:
@@ -181,40 +185,50 @@ class _ViewDonationPageState extends State<ViewDonationPage>
     );
   }
 
-  Widget _infoRow(IconData icon, String title, String value) {
+  Widget _infoRow(
+    IconData icon,
+    String title,
+    String value,
+  ) {
     return Row(
       textDirection: TextDirection.rtl,
       children: [
-        Icon(icon, size: 20, color: AppDesign.primary),
-
+        Icon(
+          icon,
+          size: 20,
+          color: AppDesign.primary,
+        ),
         const SizedBox(width: 8),
-
         Text(
           title,
           style: AppDesign.captionStyle.copyWith(
             color: AppDesign.textSecondary,
           ),
         ),
-
         const SizedBox(width: 12),
-
         Text(
           value,
-          style: AppDesign.bodyStyle.copyWith(fontWeight: FontWeight.w700),
+          style: AppDesign.bodyStyle.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ],
     );
   }
 
-  Widget _deliveryChip(String method) {
+  Widget _deliveryChip(String method, {Widget? trailing}) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: trailing != null ? 10 : 14,
+      ),
       decoration: BoxDecoration(
         color: AppDesign.surface,
         borderRadius: BorderRadius.circular(AppDesign.radiusMD),
         border: Border.all(color: AppDesign.border),
       ),
       child: Row(
+        mainAxisSize: trailing != null ? MainAxisSize.max : MainAxisSize.min,
         textDirection: TextDirection.rtl,
         children: [
           const Icon(
@@ -222,23 +236,63 @@ class _ViewDonationPageState extends State<ViewDonationPage>
             color: AppDesign.primary,
             size: 20,
           ),
-
           const SizedBox(width: 8),
-
           Text(
             "طريقة التوصيل",
             style: AppDesign.captionStyle.copyWith(
               color: AppDesign.textSecondary,
             ),
           ),
-
           const SizedBox(width: 12),
-
-          Text(
-            method,
-            style: AppDesign.bodyStyle.copyWith(fontWeight: FontWeight.w700),
-          ),
+          if (trailing != null)
+            Expanded(
+              child: Text(
+                method,
+                style: AppDesign.bodyStyle.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            )
+          else
+            Text(
+              method,
+              style: AppDesign.bodyStyle.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          if (trailing != null) trailing,
         ],
+      ),
+    );
+  }
+
+  /// زر مسح الباركود (مربع على اليسار) لتأكيد التسليم للمستودع
+  Widget _scanSquareButton(String donationId) {
+    return Tooltip(
+      message: 'مسح الباركود لتأكيد التسليم للمستودع',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => DropoffScanPage(donationId: donationId),
+            ),
+          );
+        },
+        child: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: AppDesign.primary,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(
+            Icons.qr_code_scanner_rounded,
+            color: Colors.white,
+            size: 26,
+          ),
+        ),
       ),
     );
   }
@@ -260,9 +314,9 @@ class _ViewDonationPageState extends State<ViewDonationPage>
       final currentUser = FirebaseAuth.instance.currentUser;
 
       if (currentUser == null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('يجب تسجيل الدخول أولاً')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('يجب تسجيل الدخول أولاً')),
+        );
         return;
       }
 
@@ -272,14 +326,21 @@ class _ViewDonationPageState extends State<ViewDonationPage>
           .get();
 
       if (!donationDoc.exists) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('التبرع غير موجود')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('التبرع غير موجود')),
+        );
         return;
       }
 
       final donationData = donationDoc.data() as Map<String, dynamic>;
       final donorId = donationData['donorID']?.toString();
+
+      if (donorId != currentUser.uid) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('لا يمكنك حذف تبرع لا يخصك')),
+        );
+        return;
+      }
 
       final boxesSnapshot = await FirebaseFirestore.instance
           .collection('donation_boxes')
@@ -297,15 +358,15 @@ class _ViewDonationPageState extends State<ViewDonationPage>
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('تم حذف التبرع بنجاح')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم حذف التبرع بنجاح')),
+      );
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('فشل حذف التبرع: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('فشل حذف التبرع: $e')),
+      );
     }
   }
 
@@ -313,7 +374,8 @@ class _ViewDonationPageState extends State<ViewDonationPage>
     final confirm = await AppDesign.showAppDialog(
       context: context,
       title: 'تأكيد التبرع',
-      message: 'هل تريد اتمام هذا التبرع؟\n',
+      message:
+          'هل تريد اتمام هذا التبرع؟\n\n! بعد التأكيد لن تتمكن من التعديل أو الحذف',
     );
 
     if (confirm != true) return;
@@ -324,12 +386,16 @@ class _ViewDonationPageState extends State<ViewDonationPage>
           .collection('donations')
           .doc(docId)
           .update({
-            'updatedAt': FieldValue.serverTimestamp(), // تحديث وقت التأكيد
-          });
+        'updatedAt': FieldValue.serverTimestamp(), // تحديث وقت التأكيد
+      });
 
       if (!mounted) return;
 
-      Navigator.pushNamed(context, '/deliveryMethod', arguments: docId);
+      Navigator.pushNamed(
+        context,
+        '/deliveryMethod',
+        arguments: docId,
+      );
     } catch (e) {
       debugPrint("Error updating donation: $e");
     }
@@ -351,7 +417,10 @@ class _ViewDonationPageState extends State<ViewDonationPage>
     );
 
     if (result == true && mounted) {
-      AppDesign.showSuccessSnackBar(context, 'تم تحديث التبرع بنجاح');
+      AppDesign.showSuccessSnackBar(
+        context,
+        'تم تحديث التبرع بنجاح',
+      );
     }
   }
 
@@ -365,7 +434,10 @@ class _ViewDonationPageState extends State<ViewDonationPage>
             child: pw.Column(
               mainAxisSize: pw.MainAxisSize.min,
               children: [
-                pw.Text(boxCode, style: pw.TextStyle(fontSize: 42)),
+                pw.Text(
+                  boxCode,
+                  style: pw.TextStyle(fontSize: 42),
+                ),
                 pw.SizedBox(height: 10),
                 pw.Text("ID: $boxId"),
               ],
@@ -375,15 +447,16 @@ class _ViewDonationPageState extends State<ViewDonationPage>
       ),
     );
 
-    await Printing.layoutPdf(onLayout: (format) async => pdf.save());
+    await Printing.layoutPdf(
+      onLayout: (format) async => pdf.save(),
+    );
   }
 
   Future<void> printAllBoxesLabels(List boxes) async {
     final pdf = pw.Document();
 
-    final logoBytes = (await rootBundle.load(
-      'assets/images/logo.png',
-    )).buffer.asUint8List();
+    final logoBytes =
+        (await rootBundle.load('assets/images/logo.png')).buffer.asUint8List();
 
     final logoImage = pw.MemoryImage(logoBytes);
 
@@ -395,8 +468,7 @@ class _ViewDonationPageState extends State<ViewDonationPage>
             runSpacing: 10,
             children: boxes.map((box) {
               final data = box.data() as Map<String, dynamic>;
-              final boxNumber = data['boxNumber'] ?? 0;
-              final boxCode = data['boxCode'] ?? '---';
+              final boxCode = (data['boxCode'] ?? '---').toString();
 
               return pw.Container(
                 width: 180,
@@ -412,12 +484,24 @@ class _ViewDonationPageState extends State<ViewDonationPage>
                 child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.center,
                   children: [
-                    pw.Image(logoImage, width: 70),
-
+                    pw.Image(
+                      logoImage,
+                      width: 70,
+                    ),
+                    pw.SizedBox(height: 8),
+                    pw.Container(
+                      height: 1,
+                      color: PdfColor.fromHex("#0A4D5C"),
+                    ),
                     pw.SizedBox(height: 8),
 
-                    pw.Container(height: 1, color: PdfColor.fromHex("#0A4D5C")),
-
+                    // QR فعلي يحتوي نص الـ boxCode (هذا اللي يتم مسحه)
+                    pw.BarcodeWidget(
+                      barcode: pw.Barcode.qrCode(),
+                      data: boxCode,
+                      width: 80,
+                      height: 80,
+                    ),
                     pw.SizedBox(height: 8),
 
                     pw.Text(
@@ -428,9 +512,7 @@ class _ViewDonationPageState extends State<ViewDonationPage>
                         fontWeight: pw.FontWeight.bold,
                       ),
                     ),
-
                     pw.SizedBox(height: 6),
-
                     pw.Text(
                       "Donation ID",
                       style: pw.TextStyle(
@@ -438,11 +520,9 @@ class _ViewDonationPageState extends State<ViewDonationPage>
                         color: PdfColors.grey700,
                       ),
                     ),
-
                     pw.SizedBox(height: 2),
-
                     pw.Text(
-                      data['donationId'] ?? '',
+                      (data['donationId'] ?? '').toString(),
                       style: pw.TextStyle(
                         fontSize: 9,
                         color: PdfColor.fromHex("#0A4D5C"),
@@ -459,7 +539,19 @@ class _ViewDonationPageState extends State<ViewDonationPage>
       ),
     );
 
-    await Printing.layoutPdf(onLayout: (format) async => pdf.save());
+    await Printing.layoutPdf(
+      onLayout: (format) async => pdf.save(),
+    );
+  }
+
+  /// هل الصندوق لسا ما تم تسليمه للمستودع؟
+  bool _boxNeedsDropoff(Map<String, dynamic> data) {
+    final s = (data['status'] ?? '').toString().toLowerCase();
+    return s != 'available' &&
+        s != 'reserved' &&
+        s != 'delivered' &&
+        s != 'completed' &&
+        s != 'draft';
   }
 
   Widget _buildDonationCard(DocumentSnapshot doc) {
@@ -545,20 +637,26 @@ class _ViewDonationPageState extends State<ViewDonationPage>
             ),
             child: Column(
               children: [
-                _infoRow(Icons.wc_outlined, "الجنس", gender),
-
+                _infoRow(
+                  Icons.wc_outlined,
+                  "الجنس",
+                  gender,
+                ),
                 const SizedBox(height: 12),
-
-                _infoRow(Icons.cake_outlined, "الفئة العمرية", ageGroup),
-
+                _infoRow(
+                  Icons.cake_outlined,
+                  "الفئة العمرية",
+                  ageGroup,
+                ),
                 if (generalSize.isNotEmpty) ...[
                   const SizedBox(height: 12),
-
-                  _infoRow(Icons.straighten_outlined, "المقاس", generalSize),
+                  _infoRow(
+                    Icons.straighten_outlined,
+                    "المقاس",
+                    generalSize,
+                  ),
                 ],
-
                 const SizedBox(height: 12),
-
                 _infoRow(
                   Icons.inventory_2_outlined,
                   "عدد القطع",
@@ -570,9 +668,95 @@ class _ViewDonationPageState extends State<ViewDonationPage>
 
           if (!isDraft) ...[
             const SizedBox(height: 10),
-            Align(
-              alignment: Alignment.centerRight,
-              child: _deliveryChip(_formatDeliveryMethod(deliveryMethod)),
+            StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('donation_boxes')
+                  .where('donationId', isEqualTo: doc.id)
+                  .snapshots(),
+              builder: (context, snap) {
+                final boxDocs = snap.data?.docs ?? [];
+
+                // زر المسح: فقط للتوصيل الذاتي وإذا فيه صناديق لسا ما انسلمت
+                final bool showScan =
+                    deliveryMethod.toLowerCase() == 'self_delivery' &&
+                        boxDocs.any((b) =>
+                            _boxNeedsDropoff(b.data() as Map<String, dynamic>));
+
+                final bool isPickup =
+                    deliveryMethod.toLowerCase() == 'pickup';
+
+                // بيانات العنوان المرتبط بخيار الاستلام من الموقع
+                final String city =
+                    (data['city'] ?? data['donorCity'] ?? '').toString().trim();
+                final String district =
+                    (data['district'] ?? data['neighborhood'] ??
+                            data['donorDistrict'] ?? '')
+                        .toString()
+                        .trim();
+                final String nationalAddress =
+                    (data['nationalAddress'] ?? data['fullAddress'] ??
+                            data['address'] ?? data['donorNationalAddress'] ?? '')
+                        .toString()
+                        .trim();
+
+                return SizedBox(
+                  width: double.infinity,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _deliveryChip(
+                        _formatDeliveryMethod(deliveryMethod),
+                        trailing: showScan ? _scanSquareButton(doc.id) : null,
+                      ),
+                      if (isPickup &&
+                          (city.isNotEmpty ||
+                              district.isNotEmpty ||
+                              nationalAddress.isNotEmpty)) ...[
+                        const SizedBox(height: AppDesign.spaceSM),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(AppDesign.spaceMD),
+                          decoration: BoxDecoration(
+                            color: AppDesign.surface,
+                            borderRadius:
+                                BorderRadius.circular(AppDesign.radiusMD),
+                            border: Border.all(color: AppDesign.border),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                'عنوان الاستلام',
+                                textAlign: TextAlign.right,
+                                style: AppDesign.captionStyle.copyWith(
+                                  color: AppDesign.primary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              if (city.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                _infoRow(Icons.location_city_outlined, 'المدينة', city),
+                              ],
+                              if (district.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                _infoRow(Icons.map_outlined, 'الحي', district),
+                              ],
+                              if (nationalAddress.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                _infoRow(
+                                  Icons.home_outlined,
+                                  'العنوان الوطني',
+                                  nationalAddress,
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              },
             ),
             const SizedBox(height: AppDesign.spaceLG),
             StreamBuilder<QuerySnapshot>(
@@ -592,15 +776,7 @@ class _ViewDonationPageState extends State<ViewDonationPage>
                   );
                 }
 
-                final boxes = snapshot.data!.docs.where((box) {
-                  final data = box.data() as Map<String, dynamic>;
-
-                  if (!data.containsKey('items')) return false;
-
-                  final items = data['items'];
-
-                  return items is List && items.isNotEmpty;
-                }).toList();
+                final boxes = snapshot.data!.docs;
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
@@ -622,26 +798,26 @@ class _ViewDonationPageState extends State<ViewDonationPage>
                       final status = formatBoxStatus(rawStatus);
                       final statusColor = getBoxStatusColor(rawStatus);
                       final statusIcon = getBoxStatusIcon(rawStatus);
-                      final boxCode = data['boxCode'] ?? '---';
+                      final boxCode = (data['boxCode'] ?? '---').toString();
                       final parts = boxCode.split('-');
                       final leftPart = parts.isNotEmpty ? parts[0] : '';
                       final rightPart = parts.length >= 2 ? parts[1] : '';
                       final items = data['items'] ?? [];
 
                       return Container(
-                        margin: const EdgeInsets.only(
-                          bottom: AppDesign.spaceSM,
-                        ),
+                        margin:
+                            const EdgeInsets.only(bottom: AppDesign.spaceSM),
                         decoration: AppDesign.softCardDecoration,
                         child: ExpansionTile(
                           tilePadding: const EdgeInsets.symmetric(
                             horizontal: AppDesign.spaceMD,
                             vertical: AppDesign.spaceSM,
                           ),
-
                           title: Row(
+                            textDirection: TextDirection.rtl,
                             children: [
                               Row(
+                                textDirection: TextDirection.rtl,
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
@@ -649,9 +825,7 @@ class _ViewDonationPageState extends State<ViewDonationPage>
                                     size: 18,
                                     color: statusColor,
                                   ),
-
                                   const SizedBox(width: 5),
-
                                   Text(
                                     status,
                                     style: AppDesign.captionStyle.copyWith(
@@ -661,9 +835,7 @@ class _ViewDonationPageState extends State<ViewDonationPage>
                                   ),
                                 ],
                               ),
-
                               AppGap.wMD,
-
                               Expanded(
                                 child: RichText(
                                   textAlign: TextAlign.left,
@@ -691,7 +863,6 @@ class _ViewDonationPageState extends State<ViewDonationPage>
                               ),
                             ],
                           ),
-
                           children: [
                             Padding(
                               padding: const EdgeInsets.all(AppDesign.spaceMD),
@@ -701,19 +872,15 @@ class _ViewDonationPageState extends State<ViewDonationPage>
 
                                   return Container(
                                     margin: const EdgeInsets.only(
-                                      bottom: AppDesign.spaceSM,
-                                    ),
+                                        bottom: AppDesign.spaceSM),
                                     padding: const EdgeInsets.all(
-                                      AppDesign.spaceSM,
-                                    ),
+                                        AppDesign.spaceSM),
                                     decoration: BoxDecoration(
                                       color: AppDesign.surface,
                                       borderRadius: BorderRadius.circular(
-                                        AppDesign.radiusMD,
-                                      ),
-                                      border: Border.all(
-                                        color: AppDesign.border,
-                                      ),
+                                          AppDesign.radiusMD),
+                                      border:
+                                          Border.all(color: AppDesign.border),
                                     ),
                                     child: Row(
                                       children: [
@@ -725,29 +892,23 @@ class _ViewDonationPageState extends State<ViewDonationPage>
                                             ? ClipRRect(
                                                 borderRadius:
                                                     BorderRadius.circular(
-                                                      AppDesign.radiusSM,
-                                                    ),
+                                                        AppDesign.radiusSM),
                                                 child: Image.network(
                                                   item['imageUrl'],
                                                   width: 55,
                                                   height: 55,
                                                   fit: BoxFit.cover,
-                                                  errorBuilder:
-                                                      (
-                                                        context,
-                                                        error,
-                                                        stackTrace,
-                                                      ) {
-                                                        return Container(
-                                                          width: 55,
-                                                          height: 55,
-                                                          color: AppDesign
-                                                              .surfaceAlt,
-                                                          child: const Icon(
-                                                            Icons.broken_image,
-                                                          ),
-                                                        );
-                                                      },
+                                                  errorBuilder: (context,
+                                                      error, stackTrace) {
+                                                    return Container(
+                                                      width: 55,
+                                                      height: 55,
+                                                      color:
+                                                          AppDesign.surfaceAlt,
+                                                      child: const Icon(
+                                                          Icons.broken_image),
+                                                    );
+                                                  },
                                                 ),
                                               )
                                             : Container(
@@ -757,16 +918,12 @@ class _ViewDonationPageState extends State<ViewDonationPage>
                                                   color: AppDesign.surfaceAlt,
                                                   borderRadius:
                                                       BorderRadius.circular(
-                                                        AppDesign.radiusSM,
-                                                      ),
+                                                          AppDesign.radiusSM),
                                                 ),
                                                 child: const Icon(
-                                                  Icons.image_not_supported,
-                                                ),
+                                                    Icons.image_not_supported),
                                               ),
-
                                         AppGap.wMD,
-
                                         Expanded(
                                           child: Column(
                                             crossAxisAlignment:
@@ -776,9 +933,8 @@ class _ViewDonationPageState extends State<ViewDonationPage>
                                                 "القطعة ${index + 1}",
                                                 style: AppDesign.bodyStyle
                                                     .copyWith(
-                                                      fontWeight:
-                                                          FontWeight.w700,
-                                                    ),
+                                                  fontWeight: FontWeight.w700,
+                                                ),
                                               ),
                                               const SizedBox(height: 2),
                                               Text(
@@ -826,7 +982,9 @@ class _ViewDonationPageState extends State<ViewDonationPage>
                   child: OutlinedButton.icon(
                     onPressed: () => _openEditDonation(doc),
                     style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 10,
+                      ),
                     ),
                     icon: const Icon(Icons.edit_outlined),
                     label: const Text('تعديل'),
@@ -837,7 +995,9 @@ class _ViewDonationPageState extends State<ViewDonationPage>
                   child: OutlinedButton.icon(
                     onPressed: () => _deleteDonation(doc.id),
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 10,
+                      ),
                       foregroundColor: AppDesign.error,
                       side: const BorderSide(color: AppDesign.error),
                     ),
@@ -850,7 +1010,9 @@ class _ViewDonationPageState extends State<ViewDonationPage>
                   child: ElevatedButton.icon(
                     onPressed: () => _moveDraftToConfirmed(doc.id),
                     style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 10,
+                      ),
                     ),
                     icon: const Icon(Icons.check),
                     label: const Text('تأكيد'),
@@ -990,10 +1152,8 @@ class _ViewDonationPageState extends State<ViewDonationPage>
           ),
           NavigationDestination(
             icon: Icon(Icons.more_horiz_rounded, color: AppDesign.primary),
-            selectedIcon: Icon(
-              Icons.more_horiz_rounded,
-              color: AppDesign.primary,
-            ),
+            selectedIcon:
+                Icon(Icons.more_horiz_rounded, color: AppDesign.primary),
             label: 'المزيد',
           ),
         ],
@@ -1075,9 +1235,8 @@ class _ViewDonationPageState extends State<ViewDonationPage>
                       labelColor: AppDesign.white,
                       unselectedLabelColor: AppDesign.primary,
                       dividerColor: Colors.transparent,
-                      splashBorderRadius: BorderRadius.circular(
-                        AppDesign.radiusMD,
-                      ),
+                      splashBorderRadius:
+                          BorderRadius.circular(AppDesign.radiusMD),
                       labelStyle: AppDesign.bodyStyle.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
@@ -1103,6 +1262,216 @@ class _ViewDonationPageState extends State<ViewDonationPage>
           ),
         ),
         bottomNavigationBar: _buildBottomNavigationBar(),
+      ),
+    );
+  }
+}
+
+/// ═════════ صفحة مسح الباركود لتأكيد التسليم للمستودع ═════════
+/// ترجع true إذا تم تسليم كل صناديق التبرع.
+class DropoffScanPage extends StatefulWidget {
+  final String donationId;
+
+  const DropoffScanPage({super.key, required this.donationId});
+
+  @override
+  State<DropoffScanPage> createState() => _DropoffScanPageState();
+}
+
+class _DropoffScanPageState extends State<DropoffScanPage> {
+  final MobileScannerController _controller = MobileScannerController(
+    detectionSpeed: DetectionSpeed.noDuplicates,
+    formats: const [BarcodeFormat.all],
+  );
+
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  String _normalize(String s) => s.trim().toLowerCase();
+
+  void _toast(String msg, {bool error = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg, textAlign: TextAlign.center),
+        backgroundColor: error ? Colors.red.shade700 : Colors.green.shade700,
+      ),
+    );
+  }
+
+  Future<void> _showSuccessDialog(String message) {
+    return showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Icon(Icons.check_circle, color: Colors.green, size: 56),
+          content: Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          actionsAlignment: MainAxisAlignment.center,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('تم'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _onDetect(BarcodeCapture capture) async {
+    if (_busy) return;
+
+    final raw = capture.barcodes
+        .map((b) => b.rawValue)
+        .firstWhere((v) => v != null && v.trim().isNotEmpty,
+            orElse: () => null);
+    if (raw == null) return;
+
+    setState(() => _busy = true);
+
+    try {
+      final db = FirebaseFirestore.instance;
+
+      final snap = await db
+          .collection('donation_boxes')
+          .where('donationId', isEqualTo: widget.donationId)
+          .get();
+
+      // دوّر على الصندوق اللي كوده يطابق الباركود
+      QueryDocumentSnapshot<Map<String, dynamic>>? match;
+      for (final d in snap.docs) {
+        final code = (d.data()['boxCode'] ?? '').toString();
+        if (_normalize(code) == _normalize(raw)) {
+          match = d;
+          break;
+        }
+      }
+
+      if (match == null) {
+        _toast('هذا الباركود لا يخص هذا التبرع', error: true);
+        await Future.delayed(const Duration(seconds: 2));
+        if (mounted) setState(() => _busy = false);
+        return;
+      }
+
+      if (match.data()['status'] == 'available') {
+        _toast('تم تأكيد تسليم هذا الصندوق مسبقاً', error: true);
+        await Future.delayed(const Duration(seconds: 2));
+        if (mounted) setState(() => _busy = false);
+        return;
+      }
+
+      // 1) الصندوق -> متاح
+      await match.reference.update({
+        'status': 'available',
+        'receivedAtWarehouse': FieldValue.serverTimestamp(),
+      });
+
+      // 2) إذا كل الصناديق صارت متاحة، التبرع -> متاح
+      final remaining = snap.docs
+          .where((d) => d.id != match!.id && d.data()['status'] != 'available')
+          .toList();
+
+      final allDone = remaining.isEmpty;
+
+      if (allDone) {
+        await db.collection('donations').doc(widget.donationId).update({
+          'status': 'available',
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      if (!mounted) return;
+
+      await _showSuccessDialog(
+        allDone
+            ? 'تم تسليم التبرع بالكامل للمستودع'
+            : 'تم تسليم الصندوق، باقي ${remaining.length}',
+      );
+
+      if (!mounted) return;
+
+      if (allDone) {
+        Navigator.pop(context, true);
+      } else {
+        setState(() => _busy = false);
+      }
+    } catch (e) {
+      _toast('حدث خطأ، حاول مرة ثانية', error: true);
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        appBar: AppBar(
+          backgroundColor: AppDesign.primary,
+          foregroundColor: Colors.white,
+          title: const Text('تأكيد التسليم للمستودع'),
+          centerTitle: true,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.flash_on),
+              onPressed: () => _controller.toggleTorch(),
+            ),
+          ],
+        ),
+        body: Stack(
+          children: [
+            MobileScanner(controller: _controller, onDetect: _onDetect),
+            Center(
+              child: Container(
+                width: 260,
+                height: 260,
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.white, width: 3),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 24,
+              right: 24,
+              bottom: 40,
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.6),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Text(
+                  'وجّه الكاميرا نحو باركود الصندوق لتأكيد تسليمه',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white, fontSize: 14),
+                ),
+              ),
+            ),
+            if (_busy)
+              Container(
+                color: Colors.black38,
+                child: const Center(child: CircularProgressIndicator()),
+              ),
+          ],
+        ),
       ),
     );
   }
