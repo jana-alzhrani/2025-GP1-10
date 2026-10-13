@@ -33,10 +33,11 @@ const Map<String, String> kStatusLabels = {
   'requested': 'تم الطلب',
   'reserved': 'تم الحجز',
   'delivered': 'جاري التوصيل',
-  'completed': 'تم التوصيل',
+  'completed': 'تم الاستلام',
 };
 
-String _statusLabel(String s) => kStatusLabels[s] ?? s;
+String _statusLabel(String s, {String method = ''}) =>
+    kStatusLabels[s] ?? s;
 
 String _deliveryLabel(String m) {
   switch (m) {
@@ -361,11 +362,13 @@ class OrderCard extends StatelessWidget {
     final addr = data['deliveryAddress'];
     final warehouseName =
         addr is Map ? (addr['warehouseName'] ?? '').toString() : '';
+    final city = addr is Map ? (addr['city'] ?? '').toString() : '';
+    final district = addr is Map ? (addr['district'] ?? '').toString() : '';
 
     final shortId =
         requestId.length < 6 ? requestId : requestId.substring(0, 6);
 
-    // أيقونة المسح تظهر فقط للاستلام من المستودع وقبل اكتمال الطلب
+    // زر المسح يظهر فقط للاستلام من المستودع وقبل اكتمال الطلب
     final canScan = method == 'pickup' && status != kCompletedStatus;
 
     return Container(
@@ -400,7 +403,7 @@ class OrderCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              _StatusChip(label: _statusLabel(status)),
+              _StatusChip(label: _statusLabel(status, method: method)),
               const SizedBox(width: 8),
               Container(
                 width: 38,
@@ -434,22 +437,33 @@ class OrderCard extends StatelessWidget {
                 label: 'طريقة التوصيل',
                 value: _deliveryLabel(method),
                 trailing: canScan
-                    ? IconButton(
-                        tooltip: 'مسح الباركود لتأكيد الاستلام',
-                        visualDensity: VisualDensity.compact,
-                        icon: Icon(
-                          Icons.qr_code_scanner_rounded,
-                          color: AppDesign.primary,
-                        ),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  PickupScanPage(requestId: requestId),
+                    ? Tooltip(
+                        message: 'مسح الباركود لتأكيد الاستلام',
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    PickupScanPage(requestId: requestId),
+                              ),
+                            );
+                          },
+                          child: Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: AppDesign.primary,
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                          );
-                        },
+                            child: const Icon(
+                              Icons.qr_code_scanner_rounded,
+                              color: Colors.white,
+                              size: 26,
+                            ),
+                          ),
+                        ),
                       )
                     : null,
               ),
@@ -458,6 +472,20 @@ class OrderCard extends StatelessWidget {
                   icon: Icons.warehouse_outlined,
                   label: 'المستودع',
                   value: warehouseName,
+                ),
+
+              // المدينة والحي: يظهران فقط إذا الطلب توصيل
+              if (method == 'delivery' && city.isNotEmpty)
+                _InfoRow(
+                  icon: Icons.location_city_outlined,
+                  label: 'المدينة',
+                  value: city,
+                ),
+              if (method == 'delivery' && district.isNotEmpty)
+                _InfoRow(
+                  icon: Icons.map_outlined,
+                  label: 'الحي',
+                  value: district,
                 ),
             ],
           ),
@@ -491,6 +519,7 @@ class OrderCard extends StatelessWidget {
                       data: b.data(),
                       statusLabel: _statusLabel(
                         (b.data()['status'] ?? status).toString(),
+                        method: method,
                       ),
                     ),
                 ],
@@ -780,7 +809,7 @@ class _StatusChip extends StatelessWidget {
 
 /// ═══════════════════════════ صفحة مسح الباركود (تأكيد الاستلام) ═══════════════════════════
 /// صفحة مسح باركود الصندوق لتأكيد الاستلام من المستودع.
-/// ترجع true عند نجاح تأكيد استلام صندوق.
+/// ترجع true عند اكتمال استلام كل الصناديق.
 class PickupScanPage extends StatefulWidget {
   final String requestId;
 
@@ -820,12 +849,41 @@ class _PickupScanPageState extends State<PickupScanPage> {
     );
   }
 
+  Future<void> _showSuccessDialog(String message) {
+    return showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Icon(Icons.check_circle, color: Colors.green, size: 56),
+          content: Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          actionsAlignment: MainAxisAlignment.center,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('تم'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _onDetect(BarcodeCapture capture) async {
     if (_busy) return;
 
     final raw = capture.barcodes
         .map((b) => b.rawValue)
-        .firstWhere((v) => v != null && v.trim().isNotEmpty, orElse: () => null);
+        .firstWhere((v) => v != null && v.trim().isNotEmpty,
+            orElse: () => null);
     if (raw == null) return;
 
     setState(() => _busy = true);
@@ -868,11 +926,14 @@ class _PickupScanPageState extends State<PickupScanPage> {
       });
 
       // 2) إذا كل الصناديق انستلمت، اقفل الطلب
-      final remaining = snap.docs.where(
-        (d) => d.id != match!.id && d.data()['status'] != kCompletedStatus,
-      );
+      final remaining = snap.docs
+          .where((d) =>
+              d.id != match!.id && d.data()['status'] != kCompletedStatus)
+          .toList();
 
-      if (remaining.isEmpty) {
+      final allDone = remaining.isEmpty;
+
+      if (allDone) {
         await db.collection(kRequestsCollection).doc(widget.requestId).update({
           'status': kCompletedStatus,
           'deliveredAt': FieldValue.serverTimestamp(),
@@ -880,15 +941,20 @@ class _PickupScanPageState extends State<PickupScanPage> {
       }
 
       if (!mounted) return;
-      _toast(remaining.isEmpty
-          ? 'تم تأكيد استلام الطلب بالكامل'
-          : 'تم تأكيد استلام الصندوق، باقي ${remaining.length}');
 
-      if (remaining.isEmpty) {
+      // 3) رسالة "تم الاستلام"
+      await _showSuccessDialog(
+        allDone
+            ? 'تم استلام الطلب بالكامل'
+            : 'تم استلام الصندوق، باقي ${remaining.length}',
+      );
+
+      if (!mounted) return;
+
+      if (allDone) {
         Navigator.pop(context, true);
       } else {
-        await Future.delayed(const Duration(seconds: 2));
-        if (mounted) setState(() => _busy = false);
+        setState(() => _busy = false);
       }
     } catch (e) {
       _toast('حدث خطأ، حاول مرة ثانية', error: true);
